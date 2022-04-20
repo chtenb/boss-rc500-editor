@@ -1,6 +1,10 @@
 use clap::Parser;
+mod editor;
 mod exit_codes;
 mod io;
+mod model;
+mod reader;
+mod writer;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
