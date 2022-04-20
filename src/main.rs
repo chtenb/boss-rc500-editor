@@ -10,17 +10,48 @@ mod writer;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    working_dir: String,
+    #[clap(subcommand)]
+    command: Command,
+}
 
-    /// If the working directory already contains a config file, overwrite it
-    #[clap(short, long)]
-    overwrite: bool,
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    Pull {
+        working_dir: String,
+        /// If the working directory already contains a config file, overwrite it
+        #[clap(short, long)]
+        overwrite: bool,
+    },
+    Push,
+    Read{
+        filename: String,
+    },
+    Write,
 }
 
 fn main() {
     let args = Args::parse();
-    match io::pull(&args.working_dir) {
-        Err(()) => std::process::exit(exit_codes::ERROR),
+    let result = match args.command {
+        Command::Pull {
+            working_dir,
+            overwrite: _,
+        } => io::pull(&working_dir),
+        Command::Push => {
+            Err("Not implemented".to_string())
+        },
+        Command::Read{filename} => {
+            let config = reader::read(&filename);
+            Ok(())
+        },
+        Command::Write => {
+            Err("Not implemented".to_string())
+        }
+    };
+    match result {
+        Err(e) => {
+            println!("{}", e);
+            std::process::exit(exit_codes::ERROR)
+        },
         Ok(()) => std::process::exit(exit_codes::OK),
-    }
+    };
 }

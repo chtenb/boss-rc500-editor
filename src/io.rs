@@ -7,18 +7,17 @@ use windows::Devices::Portable::StorageDevice;
 
 const DEVICE_NAME: &str = "BOSS_RC-500";
 
-pub fn pull(working_dir: &str) -> Result<(), ()> {
+pub fn pull(working_dir: &str) -> Result<(), String> {
     match list_devices() {
-        Err(e) => {
-            println!("Could not retrieve any device info: {:?}", e);
-            Err(())
-        }
+        Err(e) => Err(format!("Could not retrieve any device info: {:?}", e).to_string()),
         Ok(devs) => {
             match ask_pull(&devs) {
-                None => println!("No device chosen. Exiting."),
+                None => {
+                    println!("No device chosen. Exiting.");
+                    Ok(())
+                }
                 Some(dev) => do_pull(&dev.path, working_dir),
-            };
-            Ok(())
+            }
         }
     }
 }
@@ -70,7 +69,7 @@ fn scan_device(info: DeviceInformation) -> WindowsResult<Device> {
     })
 }
 
-fn do_pull(device_root: &str, destination: &str) -> () {
+fn do_pull(device_root: &str, destination: &str) -> Result<(), String> {
     let from = PathBuf::new()
         .join(device_root)
         .join(Path::new(r"ROLAND\DATA\MEMORY1.RC0"));
@@ -79,7 +78,10 @@ fn do_pull(device_root: &str, destination: &str) -> () {
         .join(Path::new(r"config.xml"));
     println!("Copying {:?} to {:?}", from, to);
     match fs::copy(from, to) {
-        Err(e) => println!("Error occurred while trying to copy data: {:?}", e),
-        Ok(_v) => println!("Successfully pulled data"),
+        Err(e) => Err(format!("Error occurred while trying to copy data: {:?}", e)),
+        Ok(_v) => {
+            println!("Successfully pulled data");
+            Ok(())
+        }
     }
 }
