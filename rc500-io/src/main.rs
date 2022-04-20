@@ -20,9 +20,10 @@ struct Args {
 /// Alias for the numeric type that holds system exit codes.
 pub type ExitCode = i32;
 
-/// Successful exit
 pub const OK: ExitCode = 0;
 pub const ERROR: ExitCode = 1;
+
+pub const DEVICE_NAME: &str = "BOSS_RC-500";
 
 fn main() {
     let args = Args::parse();
@@ -31,12 +32,10 @@ fn main() {
             println!("Could not retrieve any device info: {:?}", e);
             std::process::exit(ERROR);
         },
-        Ok(devs) => {
-            match ask_pull(&devs) {
-                None => println!("No device chosen. Exiting."),
-                Some(dev) => pull(&dev.path, &args.working_dir)
-            }
-        }
+        Ok(devs) => match ask_pull(&devs) {
+            None => println!("No device chosen. Exiting."),
+            Some(dev) => pull(&dev.path, &args.working_dir),
+        },
     }
     std::process::exit(OK)
 }
@@ -48,11 +47,17 @@ struct Device {
 }
 
 fn ask_pull(devs: &Vec<Device>) -> Option<Device> {
-    for dev in devs{
+    for dev in devs {
         println!("{}: {}", dev.name, dev.path)
     }
-    println!("Pull data from first device?");
-    devs.get(0).cloned()
+    println!("");
+    for dev in devs {
+        if dev.name == DEVICE_NAME {
+            println!("Pulling data from {}", dev.path);
+            return Some(dev.clone());
+        }
+    }
+    None
 }
 
 fn list_devices() -> WindowsResult<Vec<Device>> {
@@ -65,7 +70,7 @@ fn list_devices() -> WindowsResult<Vec<Device>> {
     for info in infos {
         match scan_device(info) {
             Err(e) => println!("Error occurred while retrieving device info: {:?}", e),
-            Ok(dev) => result.push(dev)
+            Ok(dev) => result.push(dev),
         }
     }
     Ok(result)
@@ -92,6 +97,6 @@ fn pull(device_root: &str, destination: &str) -> () {
     println!("Copying {:?} to {:?}", from, to);
     match copy(from, to) {
         Err(e) => println!("Error occurred while trying to copy data: {:?}", e),
-        Ok(_v) => println!("Successfully pulled data")
+        Ok(_v) => println!("Successfully pulled data"),
     }
 }
