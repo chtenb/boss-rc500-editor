@@ -26,6 +26,9 @@ enum Command {
     ReadWrite{
         filename: String,
     },
+    Edit{
+        filename: String,
+    },
 }
 
 fn main() {
@@ -41,6 +44,11 @@ fn main() {
         Command::ReadWrite{filename} => {
             reader::read(&filename)
                 .and_then(|config| writer::write(&filename, config))
+        },
+        Command::Edit{filename} => {
+            reader::read(&filename)
+                .and_then(|config| editor::init(config).map_err(|e| format!("{:?}", e)));
+            Ok(())
         },
     };
     match result {
