@@ -23,10 +23,9 @@ enum Command {
         overwrite: bool,
     },
     Push,
-    Read{
+    ReadWrite{
         filename: String,
     },
-    Write,
 }
 
 fn main() {
@@ -39,13 +38,10 @@ fn main() {
         Command::Push => {
             Err("Not implemented".to_string())
         },
-        Command::Read{filename} => {
-            let config = reader::read(&filename);
-            Ok(())
+        Command::ReadWrite{filename} => {
+            reader::read(&filename)
+                .and_then(|config| writer::write(&filename, config))
         },
-        Command::Write => {
-            Err("Not implemented".to_string())
-        }
     };
     match result {
         Err(e) => {

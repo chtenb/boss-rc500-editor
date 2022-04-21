@@ -3,7 +3,12 @@ use std::fs::File;
 use std::io;
 use std::io::Write;
 
-pub fn write(filename: &str, config: model::Config) -> io::Result<()> {
+pub fn write(filename: &str, config: model::Config) -> Result<(), String> {
+    _write(filename, config)
+        .map_err(|e| format!("Error while writing: {}", e))
+}
+
+fn _write(filename: &str, config: model::Config) -> io::Result<()> {
     let mut file = File::create(filename)?;
     writeln!(&mut file, r#"<?xml version="1.0" encoding="utf-8"?>"#)?;
     writeln!(&mut file, r#"<database name="RC-500" revision="0">"#)?;
