@@ -20,7 +20,7 @@ fn _write(filename: &str, config: model::Config) -> io::Result<()> {
             for setting in menu.settings {
                 writeln!(
                     &mut file,
-                    "  <{}>{}</{}>",
+                    "\t<{}>{}</{}>",
                     setting.key, setting.value, setting.key
                 )?;
             }
