@@ -30,7 +30,7 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
             .attribute("id")
             .ok_or("Memory tag has no id attribute".to_string())
             .and_then(|text| {
-                text.parse::<i32>()
+                text.parse::<usize>()
                     .map_err(|_e| format!("Id attribute is not an int, but: {}.", text))
             })?;
         let mut menus: Vec<model::UntypedMenu> = Vec::new();
@@ -42,7 +42,7 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
                     .text()
                     .ok_or(format!("Setting {} has no value", key))
                     .and_then(|text| {
-                        text.parse::<i32>()
+                        text.parse::<usize>()
                             .map_err(|_e| format!("Setting value is not an int, but: {}.", text))
                     })?;
                 let setting = model::UntypedKeyValue {

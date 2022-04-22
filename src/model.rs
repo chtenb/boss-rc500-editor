@@ -5,7 +5,7 @@ pub struct Config {
 
 #[derive(Clone, Debug)]
 pub struct Memory {
-    pub id: i32, // This could be implicit
+    pub id: usize, // This could be implicit
     pub menus: Vec<UntypedMenu>,
 }
 
@@ -18,5 +18,5 @@ pub struct UntypedMenu {
 #[derive(Clone, Debug)]
 pub struct UntypedKeyValue {
     pub key: String,
-    pub value: i32,
+    pub value: usize,
 }

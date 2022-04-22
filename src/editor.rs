@@ -1,3 +1,4 @@
+use crossterm::event::KeyEvent;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -12,7 +13,6 @@ use tui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
-use unicode_width::UnicodeWidthStr;
 
 use crate::model;
 
@@ -21,6 +21,7 @@ enum ActivePane {
     Memory,
     Menu,
     Setting,
+    Edit,
 }
 
 /// App holds the state of the application
@@ -30,9 +31,9 @@ struct App {
 }
 
 struct UiState {
-    memory: u16,
-    menu: u16,
-    setting: u16,
+    memory: usize,
+    menu: usize,
+    setting: usize,
     active_pane: ActivePane,
 }
 
@@ -46,6 +47,33 @@ impl Default for UiState {
         }
     }
 }
+
+fn nr_memories(app: &App) -> usize {
+    app.config.memories.len()
+}
+
+fn nr_menus(app: &App) -> usize {
+    app.config.memories[0].menus.len() as usize
+}
+
+fn nr_settings(app: &App) -> usize {
+    app.config.memories[0].menus[app.ui_state.menu as usize]
+        .settings
+        .len() as usize
+}
+
+fn get_selected_memory(app: &App) -> &model::Memory {
+    &app.config.memories[app.ui_state.memory as usize]
+}
+
+fn get_selected_menu(app: &App) -> Option<&model::UntypedMenu> {
+    if app.ui_state.active_pane == ActivePane::Memory {
+        return None;
+    }
+    let selected_memory = get_selected_memory(app);
+    Some(&selected_memory.menus[app.ui_state.menu as usize])
+}
+
 
 pub fn init(config: model::Config) -> Result<(), Box<dyn Error>> {
     // setup terminal
@@ -84,65 +112,65 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), B
         terminal.draw(|f| ui(f, &app))?;
 
         if let Event::Key(key) = event::read()? {
-            match app.ui_state.active_pane {
-                ActivePane::Memory => match key.code {
-                    KeyCode::Up => {
-                        if app.ui_state.memory > 0 {
-                            app.ui_state.memory = app.ui_state.memory - 1
-                        }
-                    }
-                    KeyCode::Down => {
-                        if (app.ui_state.memory as usize) < app.config.memories.len() - 1 {
-                            app.ui_state.memory = app.ui_state.memory + 1
-                        }
-                    }
-                    KeyCode::Right => {
-                        app.ui_state.active_pane = ActivePane::Menu;
-                    }
-                    KeyCode::Char('q') => {
-                        return Ok(());
-                    }
-                    _ => {}
-                },
-                ActivePane::Menu => match key.code {
-                    KeyCode::Up => {
-                        if app.ui_state.menu > 0 {
-                            app.ui_state.menu = app.ui_state.menu - 1
-                        }
-                    }
-                    KeyCode::Down => {
-                        if (app.ui_state.menu as usize) < nr_menus(&app) - 1 {
-                            app.ui_state.menu = app.ui_state.menu + 1
-                        }
-                    }
-                    KeyCode::Left => {
-                        app.ui_state.active_pane = ActivePane::Memory;
-                    }
-                    KeyCode::Char('q') => {
-                        return Ok(());
-                    }
-                    _ => {}
-                },
-                _ => {}
-            }
+            match handle_input(&mut app, key) {
+                Ok(()) => continue,
+                Err(()) => return Ok(()),
+            };
         }
     }
 }
 
-fn nr_menus(app: &App) -> usize {
-    app.config.memories[0].menus.len()
+fn modulo(n: i32, m: i32) -> i32 {
+    i32::rem_euclid(n as i32, m as i32) as i32
 }
 
-fn get_selected_memory(app: &App) -> &model::Memory {
-    &app.config.memories[app.ui_state.memory as usize]
+fn dec_modulo(n: usize, m: usize) -> usize {
+    modulo(n as i32 - 1, m as i32) as usize
 }
 
-fn get_selected_menu(app: &App) -> Option<&model::UntypedMenu> {
-    if app.ui_state.active_pane == ActivePane::Memory{
-        return None;
+fn inc_modulo(n: usize, m: usize) -> usize {
+    modulo(n as i32 + 1, m as i32) as usize
+}
+
+fn handle_input(app: &mut App, key: KeyEvent) -> Result<(), ()> {
+    match app.ui_state.active_pane {
+        ActivePane::Memory => match key.code {
+            KeyCode::Up => app.ui_state.memory = dec_modulo(app.ui_state.memory, nr_memories(&app)),
+            KeyCode::Down => {
+                app.ui_state.memory = inc_modulo(app.ui_state.memory, nr_memories(&app))
+            }
+            KeyCode::Right => app.ui_state.active_pane = ActivePane::Menu,
+            KeyCode::Char('q') => return Err(()),
+            _ => {}
+        },
+        ActivePane::Menu => match key.code {
+            KeyCode::Up => app.ui_state.menu = dec_modulo(app.ui_state.menu, nr_menus(&app)),
+            KeyCode::Down => app.ui_state.menu = inc_modulo(app.ui_state.menu, nr_menus(&app)),
+            KeyCode::Left => app.ui_state.active_pane = ActivePane::Memory,
+            KeyCode::Right => app.ui_state.active_pane = ActivePane::Setting,
+            KeyCode::Char('q') => return Err(()),
+            _ => {}
+        },
+        ActivePane::Setting => match key.code {
+            KeyCode::Up => {
+                app.ui_state.setting = dec_modulo(app.ui_state.setting, nr_settings(&app))
+            }
+            KeyCode::Down => {
+                app.ui_state.setting = inc_modulo(app.ui_state.setting, nr_settings(&app))
+            }
+            KeyCode::Left => app.ui_state.active_pane = ActivePane::Menu,
+            KeyCode::Enter => app.ui_state.active_pane = ActivePane::Edit,
+            KeyCode::Char('q') => return Err(()),
+            _ => {}
+        },
+        ActivePane::Edit => match key.code {
+            KeyCode::Up => {}
+            KeyCode::Down => {}
+            KeyCode::Enter | KeyCode::Esc => app.ui_state.active_pane = ActivePane::Setting,
+            _ => {}
+        },
     }
-    let selected_memory = get_selected_memory(app);
-    Some(&selected_memory.menus[app.ui_state.menu as usize])
+    Ok(())
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
@@ -152,14 +180,24 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .constraints([Constraint::Length(1), Constraint::Min(1)].as_ref())
         .split(f.size());
 
-    let (msg, style) = (
-        vec![
-            Span::raw("Press "),
-            Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" to exit"),
-        ],
-        Style::default().add_modifier(Modifier::BOLD),
-    );
+    let (msg, style) = if app.ui_state.active_pane == ActivePane::Edit {
+        (
+            vec![Span::styled(
+                "Editing value",
+                Style::default().fg(Color::Magenta),
+            )],
+            Style::default().add_modifier(Modifier::ITALIC),
+        )
+    } else {
+        (
+            vec![
+                Span::raw("Press "),
+                Span::styled("q", Style::default().fg(Color::Red)),
+                Span::raw(" to exit"),
+            ],
+            Style::default().add_modifier(Modifier::ITALIC),
+        )
+    };
     let mut text = Text::from(Spans::from(msg));
     text.patch_style(style);
     let help_message = Paragraph::new(text);
@@ -203,7 +241,9 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .iter()
             .enumerate()
             .map(|(i, m)| {
-                let style = if i == app.ui_state.menu as usize && app.ui_state.active_pane != ActivePane::Memory {
+                let style = if i == app.ui_state.menu as usize
+                    && app.ui_state.active_pane != ActivePane::Memory
+                {
                     Style::default().add_modifier(Modifier::REVERSED)
                 } else {
                     Style::default()
@@ -215,24 +255,31 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         let menus = List::new(menus).block(Block::default().borders(Borders::ALL).title("MENUS"));
         f.render_widget(menus, chunks[1]);
 
-        let settings: Vec<ListItem> = match get_selected_menu(app){
+        let settings: Vec<ListItem> = match get_selected_menu(app) {
             None => Vec::new(),
             Some(menu) => menu
                 .settings
                 .iter()
                 .enumerate()
                 .map(|(i, m)| {
-                    let style = if i == app.ui_state.setting as usize && app.ui_state.active_pane == ActivePane::Setting{
-                        Style::default().add_modifier(Modifier::REVERSED)
+                    let style = if i == app.ui_state.setting as usize {
+                        if app.ui_state.active_pane == ActivePane::Edit {
+                            Style::default().fg(Color::Red)
+                        } else if app.ui_state.active_pane == ActivePane::Setting {
+                            Style::default().add_modifier(Modifier::REVERSED)
+                        } else {
+                            Style::default()
+                        }
                     } else {
                         Style::default()
                     };
                     let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
                     ListItem::new(content).style(style)
                 })
-                .collect()
+                .collect(),
         };
-        let menus = List::new(settings).block(Block::default().borders(Borders::ALL).title("MENUS"));
-        f.render_widget(menus, chunks[2]);
+        let settings =
+            List::new(settings).block(Block::default().borders(Borders::ALL).title("SETTINGS"));
+        f.render_widget(settings, chunks[2]);
     }
 }
