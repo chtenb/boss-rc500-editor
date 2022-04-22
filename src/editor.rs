@@ -16,6 +16,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::model;
 
+#[derive(Debug, PartialEq, Eq)]
 enum ActivePane {
     Memory,
     Menu,
@@ -24,7 +25,7 @@ enum ActivePane {
 
 /// App holds the state of the application
 struct App {
-    input: model::Config,
+    config: model::Config,
     ui_state: UiState,
 }
 
@@ -57,7 +58,7 @@ pub fn init(config: model::Config) -> Result<(), Box<dyn Error>> {
     // create app and run it
     let ui_state = UiState::default();
     let app = App {
-        input: config,
+        config: config,
         ui_state: ui_state,
     };
     let res = run_app(&mut terminal, app);
@@ -91,9 +92,31 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), B
                         }
                     }
                     KeyCode::Down => {
-                        if (app.ui_state.memory as usize) < app.input.memories.len() - 1 {
+                        if (app.ui_state.memory as usize) < app.config.memories.len() - 1 {
                             app.ui_state.memory = app.ui_state.memory + 1
                         }
+                    }
+                    KeyCode::Right => {
+                        app.ui_state.active_pane = ActivePane::Menu;
+                    }
+                    KeyCode::Char('q') => {
+                        return Ok(());
+                    }
+                    _ => {}
+                },
+                ActivePane::Menu => match key.code {
+                    KeyCode::Up => {
+                        if app.ui_state.menu > 0 {
+                            app.ui_state.menu = app.ui_state.menu - 1
+                        }
+                    }
+                    KeyCode::Down => {
+                        if (app.ui_state.menu as usize) < nr_menus(&app) - 1 {
+                            app.ui_state.menu = app.ui_state.menu + 1
+                        }
+                    }
+                    KeyCode::Left => {
+                        app.ui_state.active_pane = ActivePane::Memory;
                     }
                     KeyCode::Char('q') => {
                         return Ok(());
@@ -104,6 +127,22 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), B
             }
         }
     }
+}
+
+fn nr_menus(app: &App) -> usize {
+    app.config.memories[0].menus.len()
+}
+
+fn get_selected_memory(app: &App) -> &model::Memory {
+    &app.config.memories[app.ui_state.memory as usize]
+}
+
+fn get_selected_menu(app: &App) -> Option<&model::UntypedMenu> {
+    if app.ui_state.active_pane == ActivePane::Memory{
+        return None;
+    }
+    let selected_memory = get_selected_memory(app);
+    Some(&selected_memory.menus[app.ui_state.menu as usize])
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
@@ -117,32 +156,83 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         vec![
             Span::raw("Press "),
             Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" to exit, "),
+            Span::raw(" to exit"),
         ],
-        Style::default().add_modifier(Modifier::RAPID_BLINK),
+        Style::default().add_modifier(Modifier::BOLD),
     );
     let mut text = Text::from(Spans::from(msg));
     text.patch_style(style);
     let help_message = Paragraph::new(text);
     f.render_widget(help_message, chunks[0]);
 
-    let messages: Vec<ListItem> = app
-        .input
-        .memories
-        .iter()
-        .enumerate()
-        .map(|(i, m)| {
-            let style = if (i == app.ui_state.memory as usize) {
-                Style::default().add_modifier(Modifier::REVERSED)
-            } else {
-                Style::default()
-            };
-            let content = vec![Spans::from(Span::raw(format!("MEMORY {}", m.id)))];
-            ListItem::new(content)
-                .style(style)
-        })
-        .collect();
-    let messages =
-        List::new(messages).block(Block::default().borders(Borders::ALL).title("Messages"));
-    f.render_widget(messages, chunks[1]);
+    {
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(40),
+                    Constraint::Percentage(40),
+                ]
+                .as_ref(),
+            )
+            .split(chunks[1]);
+
+        let memories: Vec<ListItem> = app
+            .config
+            .memories
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                let style = if i == app.ui_state.memory as usize {
+                    Style::default().add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default()
+                };
+                let content = vec![Spans::from(Span::raw(format!("MEMORY {}", m.id)))];
+                ListItem::new(content).style(style)
+            })
+            .collect();
+        let memories =
+            List::new(memories).block(Block::default().borders(Borders::ALL).title("MEMORY SLOTS"));
+        f.render_widget(memories, chunks[0]);
+
+        let selected_memory = get_selected_memory(app);
+        let menus: Vec<ListItem> = selected_memory
+            .menus
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                let style = if i == app.ui_state.menu as usize && app.ui_state.active_pane != ActivePane::Memory {
+                    Style::default().add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default()
+                };
+                let content = vec![Spans::from(Span::raw(format!("{}", m.name)))];
+                ListItem::new(content).style(style)
+            })
+            .collect();
+        let menus = List::new(menus).block(Block::default().borders(Borders::ALL).title("MENUS"));
+        f.render_widget(menus, chunks[1]);
+
+        let settings: Vec<ListItem> = match get_selected_menu(app){
+            None => Vec::new(),
+            Some(menu) => menu
+                .settings
+                .iter()
+                .enumerate()
+                .map(|(i, m)| {
+                    let style = if i == app.ui_state.setting as usize && app.ui_state.active_pane == ActivePane::Setting{
+                        Style::default().add_modifier(Modifier::REVERSED)
+                    } else {
+                        Style::default()
+                    };
+                    let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
+                    ListItem::new(content).style(style)
+                })
+                .collect()
+        };
+        let menus = List::new(settings).block(Block::default().borders(Borders::ALL).title("MENUS"));
+        f.render_widget(menus, chunks[2]);
+    }
 }
