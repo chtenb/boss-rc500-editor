@@ -17,7 +17,7 @@ use tui::{
 use crate::model;
 
 #[derive(Debug, PartialEq, Eq)]
-enum ActivePane {
+enum Focus {
     Memory,
     Menu,
     Setting,
@@ -34,7 +34,7 @@ struct UiState {
     memory: usize,
     menu: usize,
     setting: usize,
-    active_pane: ActivePane,
+    focus: Focus,
 }
 
 impl Default for UiState {
@@ -43,7 +43,7 @@ impl Default for UiState {
             memory: 0,
             menu: 0,
             setting: 0,
-            active_pane: ActivePane::Memory,
+            focus: Focus::Memory,
         }
     }
 }
@@ -53,27 +53,23 @@ fn nr_memories(app: &App) -> usize {
 }
 
 fn nr_menus(app: &App) -> usize {
-    app.config.memories[0].menus.len() as usize
+    app.config.memories[0].menus.len()
 }
 
 fn nr_settings(app: &App) -> usize {
-    app.config.memories[0].menus[app.ui_state.menu as usize]
+    app.config.memories[0].menus[app.ui_state.menu]
         .settings
-        .len() as usize
+        .len()
 }
 
 fn get_selected_memory(app: &App) -> &model::Memory {
-    &app.config.memories[app.ui_state.memory as usize]
+    &app.config.memories[app.ui_state.memory]
 }
 
-fn get_selected_menu(app: &App) -> Option<&model::UntypedMenu> {
-    if app.ui_state.active_pane == ActivePane::Memory {
-        return None;
-    }
+fn get_selected_menu(app: &App) -> &model::UntypedMenu {
     let selected_memory = get_selected_memory(app);
-    Some(&selected_memory.menus[app.ui_state.menu as usize])
+    &selected_memory.menus[app.ui_state.menu]
 }
-
 
 pub fn init(config: model::Config) -> Result<(), Box<dyn Error>> {
     // setup terminal
@@ -133,40 +129,40 @@ fn inc_modulo(n: usize, m: usize) -> usize {
 }
 
 fn handle_input(app: &mut App, key: KeyEvent) -> Result<(), ()> {
-    match app.ui_state.active_pane {
-        ActivePane::Memory => match key.code {
+    match app.ui_state.focus {
+        Focus::Memory => match key.code {
             KeyCode::Up => app.ui_state.memory = dec_modulo(app.ui_state.memory, nr_memories(&app)),
             KeyCode::Down => {
                 app.ui_state.memory = inc_modulo(app.ui_state.memory, nr_memories(&app))
             }
-            KeyCode::Right => app.ui_state.active_pane = ActivePane::Menu,
+            KeyCode::Right => app.ui_state.focus = Focus::Menu,
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
-        ActivePane::Menu => match key.code {
+        Focus::Menu => match key.code {
             KeyCode::Up => app.ui_state.menu = dec_modulo(app.ui_state.menu, nr_menus(&app)),
             KeyCode::Down => app.ui_state.menu = inc_modulo(app.ui_state.menu, nr_menus(&app)),
-            KeyCode::Left => app.ui_state.active_pane = ActivePane::Memory,
-            KeyCode::Right => app.ui_state.active_pane = ActivePane::Setting,
+            KeyCode::Left => app.ui_state.focus = Focus::Memory,
+            KeyCode::Right => app.ui_state.focus = Focus::Setting,
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
-        ActivePane::Setting => match key.code {
+        Focus::Setting => match key.code {
             KeyCode::Up => {
                 app.ui_state.setting = dec_modulo(app.ui_state.setting, nr_settings(&app))
             }
             KeyCode::Down => {
                 app.ui_state.setting = inc_modulo(app.ui_state.setting, nr_settings(&app))
             }
-            KeyCode::Left => app.ui_state.active_pane = ActivePane::Menu,
-            KeyCode::Enter => app.ui_state.active_pane = ActivePane::Edit,
+            KeyCode::Left => app.ui_state.focus = Focus::Menu,
+            KeyCode::Enter => app.ui_state.focus = Focus::Edit,
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
-        ActivePane::Edit => match key.code {
+        Focus::Edit => match key.code {
             KeyCode::Up => {}
             KeyCode::Down => {}
-            KeyCode::Enter | KeyCode::Esc => app.ui_state.active_pane = ActivePane::Setting,
+            KeyCode::Enter | KeyCode::Esc => app.ui_state.focus = Focus::Setting,
             _ => {}
         },
     }
@@ -180,13 +176,13 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .constraints([Constraint::Length(1), Constraint::Min(1)].as_ref())
         .split(f.size());
 
-    let (msg, style) = if app.ui_state.active_pane == ActivePane::Edit {
+    let (msg, style) = if app.ui_state.focus == Focus::Edit {
         (
             vec![Span::styled(
                 "Editing value",
                 Style::default().fg(Color::Magenta),
             )],
-            Style::default().add_modifier(Modifier::ITALIC),
+            Style::default()
         )
     } else {
         (
@@ -195,7 +191,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
                 Span::styled("q", Style::default().fg(Color::Red)),
                 Span::raw(" to exit"),
             ],
-            Style::default().add_modifier(Modifier::ITALIC),
+            Style::default()
         )
     };
     let mut text = Text::from(Spans::from(msg));
@@ -222,7 +218,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             .iter()
             .enumerate()
             .map(|(i, m)| {
-                let style = if i == app.ui_state.memory as usize {
+                let style = if i == app.ui_state.memory {
                     Style::default().add_modifier(Modifier::REVERSED)
                 } else {
                     Style::default()
@@ -235,18 +231,20 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             List::new(memories).block(Block::default().borders(Borders::ALL).title("MEMORY SLOTS"));
         f.render_widget(memories, chunks[0]);
 
+        let menus_style = match app.ui_state.focus {
+            Focus::Memory => Style::default().add_modifier(Modifier::DIM).fg(Color::DarkGray),
+            _ => Style::default(),
+        };
         let selected_memory = get_selected_memory(app);
         let menus: Vec<ListItem> = selected_memory
             .menus
             .iter()
             .enumerate()
             .map(|(i, m)| {
-                let style = if i == app.ui_state.menu as usize
-                    && app.ui_state.active_pane != ActivePane::Memory
-                {
-                    Style::default().add_modifier(Modifier::REVERSED)
+                let style = if i == app.ui_state.menu {
+                    menus_style.add_modifier(Modifier::REVERSED)
                 } else {
-                    Style::default()
+                    menus_style
                 };
                 let content = vec![Spans::from(Span::raw(format!("{}", m.name)))];
                 ListItem::new(content).style(style)
@@ -255,29 +253,31 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         let menus = List::new(menus).block(Block::default().borders(Borders::ALL).title("MENUS"));
         f.render_widget(menus, chunks[1]);
 
-        let settings: Vec<ListItem> = match get_selected_menu(app) {
-            None => Vec::new(),
-            Some(menu) => menu
-                .settings
-                .iter()
-                .enumerate()
-                .map(|(i, m)| {
-                    let style = if i == app.ui_state.setting as usize {
-                        if app.ui_state.active_pane == ActivePane::Edit {
-                            Style::default().fg(Color::Red)
-                        } else if app.ui_state.active_pane == ActivePane::Setting {
-                            Style::default().add_modifier(Modifier::REVERSED)
-                        } else {
-                            Style::default()
-                        }
-                    } else {
-                        Style::default()
-                    };
-                    let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
-                    ListItem::new(content).style(style)
-                })
-                .collect(),
+        let settings_style = match app.ui_state.focus {
+            Focus::Memory | Focus::Menu => Style::default().add_modifier(Modifier::DIM).fg(Color::DarkGray),
+            Focus::Setting | Focus::Edit => Style::default(),
         };
+        let selected_menu = get_selected_menu(app);
+        let settings: Vec<ListItem> = selected_menu
+            .settings
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                let style = if i == app.ui_state.setting {
+                    if app.ui_state.focus == Focus::Edit {
+                        settings_style.fg(Color::Red)
+                    } else if app.ui_state.focus == Focus::Setting {
+                        settings_style.add_modifier(Modifier::REVERSED)
+                    } else {
+                        settings_style
+                    }
+                } else {
+                    settings_style
+                };
+                let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
+                ListItem::new(content).style(style)
+            })
+            .collect();
         let settings =
             List::new(settings).block(Block::default().borders(Borders::ALL).title("SETTINGS"));
         f.render_widget(settings, chunks[2]);
