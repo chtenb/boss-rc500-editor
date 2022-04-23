@@ -90,6 +90,14 @@ fn get_selected_menu<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a m
     &selected_memory.menus[ui_state.menu.0.get(nr_menus(config))]
 }
 
+fn get_selected_setting_mut<'a>(config: &'a mut model::Config, ui_state: &UiState) -> &'a mut model::UntypedKeyValue {
+    let nr_memories = nr_memories(config);
+    let nr_menus = nr_menus(config);
+    let selected_memory = &mut config.memories[ui_state.memory.0.get(nr_memories)];
+    let selected_menu = &mut selected_memory.menus[ui_state.menu.0.get(nr_menus)];
+    &mut selected_menu.settings[ui_state.setting.0.get(nr_menus)]
+}
+
 pub fn init(config: &mut model::Config) -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
@@ -119,10 +127,10 @@ fn run_app<B: Backend>(
     ui_state: &mut UiState,
 ) -> Result<(), Box<dyn Error>> {
     loop {
-        terminal.draw(|f| ui(f, &config, ui_state))?;
+        terminal.draw(|f| ui(f, config, ui_state))?;
 
         if let Event::Key(key) = event::read()? {
-            match handle_input(&config, ui_state, key) {
+            match handle_input(config, ui_state, key) {
                 Ok(()) => continue,
                 Err(()) => return Ok(()),
             };
@@ -130,7 +138,7 @@ fn run_app<B: Backend>(
     }
 }
 
-fn handle_input(config: &model::Config, ui_state: &mut UiState, key: KeyEvent) -> Result<(), ()> {
+fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEvent) -> Result<(), ()> {
     match ui_state.focus {
         Focus::Memory => match key.code {
             KeyCode::Up => ui_state.memory.0.dec(nr_memories(config)),
@@ -156,8 +164,14 @@ fn handle_input(config: &model::Config, ui_state: &mut UiState, key: KeyEvent) -
             _ => {}
         },
         Focus::Edit => match key.code {
-            KeyCode::Up => {}
-            KeyCode::Down => {}
+            KeyCode::Up => {
+                let setting = get_selected_setting_mut(config, ui_state);
+                setting.value += 1;
+            }
+            KeyCode::Down => {
+                let setting = get_selected_setting_mut(config, ui_state);
+                setting.value -= 1;
+            }
             KeyCode::Enter | KeyCode::Esc => ui_state.focus = Focus::Setting,
             _ => {}
         },
