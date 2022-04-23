@@ -1,4 +1,5 @@
 use clap::Parser;
+mod arith;
 mod editor;
 mod exit_codes;
 mod io;
@@ -23,10 +24,10 @@ enum Command {
         overwrite: bool,
     },
     Push,
-    ReadWrite{
+    ReadWrite {
         filename: String,
     },
-    Edit{
+    Edit {
         filename: String,
     },
 }
@@ -38,24 +39,18 @@ fn main() {
             working_dir,
             overwrite: _,
         } => io::pull(&working_dir),
-        Command::Push => {
-            Err("Not implemented".to_string())
-        },
-        Command::ReadWrite{filename} => {
-            reader::read(&filename)
-                .and_then(|config| writer::write(&filename, config))
-        },
-        Command::Edit{filename} => {
-            reader::read(&filename)
-                .and_then(|config| editor::init(config).map_err(|e| format!("{:?}", e)));
+        Command::Push => Err("Not implemented".to_string()),
+        Command::ReadWrite { filename } => reader::read(&filename).and_then(|config| writer::write(&filename, config)),
+        Command::Edit { filename } => {
+            reader::read(&filename).and_then(|mut config| editor::init(&mut config).map_err(|e| format!("{:?}", e)));
             Ok(())
-        },
+        }
     };
     match result {
         Err(e) => {
             println!("{}", e);
             std::process::exit(exit_codes::ERROR)
-        },
+        }
         Ok(()) => std::process::exit(exit_codes::OK),
     };
 }

@@ -9,7 +9,6 @@ pub fn read(filename: &str) -> Result<model::Config, String> {
         .and_then(|v| doc_to_config(v))
 }
 
-
 fn validate_mem_node(node: roxmltree::Node) -> Result<(), String> {
     let tag = node.tag_name().name();
     if tag != "mem" {
@@ -22,7 +21,9 @@ fn validate_mem_node(node: roxmltree::Node) -> Result<(), String> {
 
 fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
     let mut memories: Vec<model::Memory> = Vec::new();
-    let database = doc.root().first_child()
+    let database = doc
+        .root()
+        .first_child()
         .ok_or("Could not find toplevel element".to_string())?;
     for mem_node in database.children().filter(|c| c.is_element()) {
         validate_mem_node(mem_node)?;
@@ -45,10 +46,7 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
                         text.parse::<usize>()
                             .map_err(|_e| format!("Setting value is not an int, but: {}.", text))
                     })?;
-                let setting = model::UntypedKeyValue {
-                    key: key,
-                    value: value,
-                };
+                let setting = model::UntypedKeyValue { key: key, value: value };
                 settings.push(setting);
             }
             let menu = model::UntypedMenu {
@@ -57,10 +55,7 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
             };
             menus.push(menu);
         }
-        let memory = model::Memory {
-            id: id,
-            menus: menus,
-        };
+        let memory = model::Memory { id: id, menus: menus };
         memories.push(memory);
     }
     Ok(model::Config { memories: memories })

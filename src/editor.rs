@@ -4,7 +4,10 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use std::cmp::min;
 use std::{error::Error, io};
+use tui::layout::Rect;
+use tui::widgets::ListState;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
@@ -14,6 +17,7 @@ use tui::{
     Frame, Terminal,
 };
 
+use crate::arith;
 use crate::model;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,55 +27,70 @@ enum Focus {
     Setting,
     Edit,
 }
-
-/// App holds the state of the application
-struct App {
-    config: model::Config,
-    ui_state: UiState,
-}
-
-struct UiState {
-    memory: usize,
-    menu: usize,
-    setting: usize,
-    focus: Focus,
-}
-
-impl Default for UiState {
-    fn default() -> UiState {
-        UiState {
-            memory: 0,
-            menu: 0,
-            setting: 0,
-            focus: Focus::Memory,
-        }
+impl Default for Focus {
+    fn default() -> Focus {
+        Focus::Memory
     }
 }
 
-fn nr_memories(app: &App) -> usize {
-    app.config.memories.len()
+#[derive(Default)]
+struct BoundedIndex {
+    index: usize,
 }
 
-fn nr_menus(app: &App) -> usize {
-    app.config.memories[0].menus.len()
+impl BoundedIndex {
+    fn get(&self, upper_bound: usize) -> usize {
+        min(self.index, upper_bound - 1)
+    }
+    fn dec(&mut self, upper_bound: usize) {
+        self.index = arith::modulo(self.get(upper_bound) as i32 - 1, upper_bound as i32) as usize;
+    }
+    fn inc(&mut self, upper_bound: usize) {
+        self.index = arith::modulo(self.get(upper_bound) as i32 + 1, upper_bound as i32) as usize;
+    }
 }
 
-fn nr_settings(app: &App) -> usize {
-    app.config.memories[0].menus[app.ui_state.menu]
-        .settings
-        .len()
+#[derive(Default)]
+struct MemoryIndex(BoundedIndex);
+#[derive(Default)]
+struct MenuIndex(BoundedIndex);
+#[derive(Default)]
+struct SettingIndex(BoundedIndex);
+
+#[derive(Default)]
+struct UiState {
+    memory: MemoryIndex,
+    menu: MenuIndex,
+    setting: SettingIndex,
+    focus: Focus,
+
+    memory_state: ListState,
+    menu_state: ListState,
+    setting_state: ListState,
 }
 
-fn get_selected_memory(app: &App) -> &model::Memory {
-    &app.config.memories[app.ui_state.memory]
+fn nr_memories(config: &model::Config) -> usize {
+    config.memories.len()
 }
 
-fn get_selected_menu(app: &App) -> &model::UntypedMenu {
-    let selected_memory = get_selected_memory(app);
-    &selected_memory.menus[app.ui_state.menu]
+fn nr_menus(config: &model::Config) -> usize {
+    config.memories[0].menus.len()
 }
 
-pub fn init(config: model::Config) -> Result<(), Box<dyn Error>> {
+fn nr_settings(config: &model::Config, ui_state: &UiState) -> usize {
+    get_selected_menu(config, ui_state).settings.len()
+}
+
+fn get_selected_memory<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a model::Memory {
+    &config.memories[ui_state.memory.0.get(nr_memories(config))]
+}
+
+fn get_selected_menu<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a model::UntypedMenu {
+    let selected_memory = get_selected_memory(config, ui_state);
+    &selected_memory.menus[ui_state.menu.0.get(nr_menus(config))]
+}
+
+pub fn init(config: &mut model::Config) -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -79,21 +98,12 @@ pub fn init(config: model::Config) -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // create app and run it
-    let ui_state = UiState::default();
-    let app = App {
-        config: config,
-        ui_state: ui_state,
-    };
-    let res = run_app(&mut terminal, app);
+    let mut ui_state = UiState::default();
+    let res = run_app(&mut terminal, config, &mut ui_state);
 
     // restore terminal
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {
@@ -103,12 +113,16 @@ pub fn init(config: model::Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), Box<dyn Error>> {
+fn run_app<B: Backend>(
+    terminal: &mut Terminal<B>,
+    config: &mut model::Config,
+    ui_state: &mut UiState,
+) -> Result<(), Box<dyn Error>> {
     loop {
-        terminal.draw(|f| ui(f, &app))?;
+        terminal.draw(|f| ui(f, &config, ui_state))?;
 
         if let Event::Key(key) = event::read()? {
-            match handle_input(&mut app, key) {
+            match handle_input(&config, ui_state, key) {
                 Ok(()) => continue,
                 Err(()) => return Ok(()),
             };
@@ -116,88 +130,50 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(), B
     }
 }
 
-fn modulo(n: i32, m: i32) -> i32 {
-    i32::rem_euclid(n as i32, m as i32) as i32
-}
-
-fn dec_modulo(n: usize, m: usize) -> usize {
-    modulo(n as i32 - 1, m as i32) as usize
-}
-
-fn inc_modulo(n: usize, m: usize) -> usize {
-    modulo(n as i32 + 1, m as i32) as usize
-}
-
-fn handle_input(app: &mut App, key: KeyEvent) -> Result<(), ()> {
-    match app.ui_state.focus {
+fn handle_input(config: &model::Config, ui_state: &mut UiState, key: KeyEvent) -> Result<(), ()> {
+    match ui_state.focus {
         Focus::Memory => match key.code {
-            KeyCode::Up => app.ui_state.memory = dec_modulo(app.ui_state.memory, nr_memories(&app)),
-            KeyCode::Down => {
-                app.ui_state.memory = inc_modulo(app.ui_state.memory, nr_memories(&app))
-            }
-            KeyCode::Right => app.ui_state.focus = Focus::Menu,
+            KeyCode::Up => ui_state.memory.0.dec(nr_memories(config)),
+            KeyCode::Down => ui_state.memory.0.inc(nr_memories(config)),
+            KeyCode::Right => ui_state.focus = Focus::Menu,
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
         Focus::Menu => match key.code {
-            KeyCode::Up => app.ui_state.menu = dec_modulo(app.ui_state.menu, nr_menus(&app)),
-            KeyCode::Down => app.ui_state.menu = inc_modulo(app.ui_state.menu, nr_menus(&app)),
-            KeyCode::Left => app.ui_state.focus = Focus::Memory,
-            KeyCode::Right => app.ui_state.focus = Focus::Setting,
+            KeyCode::Up => ui_state.menu.0.dec(nr_menus(config)),
+            KeyCode::Down => ui_state.menu.0.inc(nr_menus(config)),
+            KeyCode::Left => ui_state.focus = Focus::Memory,
+            KeyCode::Right => ui_state.focus = Focus::Setting,
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
         Focus::Setting => match key.code {
-            KeyCode::Up => {
-                app.ui_state.setting = dec_modulo(app.ui_state.setting, nr_settings(&app))
-            }
-            KeyCode::Down => {
-                app.ui_state.setting = inc_modulo(app.ui_state.setting, nr_settings(&app))
-            }
-            KeyCode::Left => app.ui_state.focus = Focus::Menu,
-            KeyCode::Enter => app.ui_state.focus = Focus::Edit,
+            KeyCode::Up => ui_state.setting.0.dec(nr_settings(config, ui_state)),
+            KeyCode::Down => ui_state.setting.0.inc(nr_settings(config, ui_state)),
+            KeyCode::Left => ui_state.focus = Focus::Menu,
+            KeyCode::Enter => ui_state.focus = Focus::Edit,
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
         Focus::Edit => match key.code {
             KeyCode::Up => {}
             KeyCode::Down => {}
-            KeyCode::Enter | KeyCode::Esc => app.ui_state.focus = Focus::Setting,
+            KeyCode::Enter | KeyCode::Esc => ui_state.focus = Focus::Setting,
             _ => {}
         },
     }
     Ok(())
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
+fn ui<B: Backend>(f: &mut Frame<B>, config: &model::Config, ui_state: &mut UiState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
-        .constraints([Constraint::Length(1), Constraint::Min(1)].as_ref())
+        .constraints([Constraint::Length(1), Constraint::Min(1), Constraint::Length(5)].as_ref())
         .split(f.size());
 
-    let (msg, style) = if app.ui_state.focus == Focus::Edit {
-        (
-            vec![Span::styled(
-                "Editing value",
-                Style::default().fg(Color::Magenta),
-            )],
-            Style::default()
-        )
-    } else {
-        (
-            vec![
-                Span::raw("Press "),
-                Span::styled("q", Style::default().fg(Color::Red)),
-                Span::raw(" to exit"),
-            ],
-            Style::default()
-        )
-    };
-    let mut text = Text::from(Spans::from(msg));
-    text.patch_style(style);
-    let help_message = Paragraph::new(text);
-    f.render_widget(help_message, chunks[0]);
+    render_help(f, chunks[0], ui_state);
+    render_description(f, chunks[2], config, ui_state);
 
     {
         let chunks = Layout::default()
@@ -212,74 +188,111 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             )
             .split(chunks[1]);
 
-        let memories: Vec<ListItem> = app
-            .config
-            .memories
-            .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                let style = if i == app.ui_state.memory {
-                    Style::default().add_modifier(Modifier::REVERSED)
-                } else {
-                    Style::default()
-                };
-                let content = vec![Spans::from(Span::raw(format!("MEMORY {}", m.id)))];
-                ListItem::new(content).style(style)
-            })
-            .collect();
-        let memories =
-            List::new(memories).block(Block::default().borders(Borders::ALL).title("MEMORY SLOTS"));
-        f.render_widget(memories, chunks[0]);
-
-        let menus_style = match app.ui_state.focus {
-            Focus::Memory => Style::default().add_modifier(Modifier::DIM).fg(Color::DarkGray),
-            _ => Style::default(),
-        };
-        let selected_memory = get_selected_memory(app);
-        let menus: Vec<ListItem> = selected_memory
-            .menus
-            .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                let style = if i == app.ui_state.menu {
-                    menus_style.add_modifier(Modifier::REVERSED)
-                } else {
-                    menus_style
-                };
-                let content = vec![Spans::from(Span::raw(format!("{}", m.name)))];
-                ListItem::new(content).style(style)
-            })
-            .collect();
-        let menus = List::new(menus).block(Block::default().borders(Borders::ALL).title("MENUS"));
-        f.render_widget(menus, chunks[1]);
-
-        let settings_style = match app.ui_state.focus {
-            Focus::Memory | Focus::Menu => Style::default().add_modifier(Modifier::DIM).fg(Color::DarkGray),
-            Focus::Setting | Focus::Edit => Style::default(),
-        };
-        let selected_menu = get_selected_menu(app);
-        let settings: Vec<ListItem> = selected_menu
-            .settings
-            .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                let style = if i == app.ui_state.setting {
-                    if app.ui_state.focus == Focus::Edit {
-                        settings_style.fg(Color::Red)
-                    } else if app.ui_state.focus == Focus::Setting {
-                        settings_style.add_modifier(Modifier::REVERSED)
-                    } else {
-                        settings_style
-                    }
-                } else {
-                    settings_style
-                };
-                let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
-                ListItem::new(content).style(style)
-            })
-            .collect();
-        let settings =
-            List::new(settings).block(Block::default().borders(Borders::ALL).title("SETTINGS"));
-        f.render_widget(settings, chunks[2]);
+        render_memories(f, chunks[0], config, ui_state);
+        render_menus(f, chunks[1], config, ui_state);
+        render_settings(f, chunks[2], config, ui_state);
     }
+}
+
+fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState) {
+    let (msg, style) = if ui_state.focus == Focus::Edit {
+        (
+            vec![Span::styled("Editing value", Style::default().fg(Color::Magenta))],
+            Style::default(),
+        )
+    } else {
+        (
+            vec![
+                Span::raw("Press "),
+                Span::styled("q", Style::default().fg(Color::Red)),
+                Span::raw(" to exit"),
+            ],
+            Style::default(),
+        )
+    };
+    let mut text = Text::from(Spans::from(msg));
+    text.patch_style(style);
+    let help_message = Paragraph::new(text);
+    f.render_widget(help_message, rect);
+}
+
+fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
+    let (description, style) = (
+        vec![Span::styled("Description here", Style::default())],
+        Style::default(),
+    );
+    let mut text = Text::from(Spans::from(description));
+    text.patch_style(style);
+    let msg = Paragraph::new(text).block(Block::default().title("DESCRIPTION").borders(Borders::ALL));
+    f.render_widget(msg, rect);
+}
+
+fn render_memories<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
+    let items_style = Style::default();
+    let memories: Vec<ListItem> = config
+        .memories
+        .iter()
+        .map(|m| {
+            let content = vec![Spans::from(Span::raw(format!("MEMORY {}", m.id)))];
+            ListItem::new(content).style(items_style)
+        })
+        .collect();
+    ui_state
+        .memory_state
+        .select(Some(ui_state.memory.0.get(nr_memories(config))));
+    let selected_style = items_style.add_modifier(Modifier::REVERSED);
+    let memories = List::new(memories)
+        .block(Block::default().borders(Borders::ALL).title("MEMORY SLOTS"))
+        .highlight_style(selected_style);
+    f.render_stateful_widget(memories, rect, &mut ui_state.memory_state);
+}
+
+fn render_menus<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
+    let items_style = match ui_state.focus {
+        Focus::Memory => Style::default().add_modifier(Modifier::DIM).fg(Color::DarkGray),
+        _ => Style::default(),
+    };
+    let selected_memory = get_selected_memory(config, ui_state);
+    let menus: Vec<ListItem> = selected_memory
+        .menus
+        .iter()
+        .map(|m| {
+            let content = vec![Spans::from(Span::raw(format!("{}", m.name)))];
+            ListItem::new(content).style(items_style)
+        })
+        .collect();
+    ui_state.menu_state.select(Some(ui_state.menu.0.get(nr_menus(config))));
+    let selected_style = items_style.add_modifier(Modifier::REVERSED);
+    let menus = List::new(menus)
+        .block(Block::default().borders(Borders::ALL).title("MENUS"))
+        .highlight_style(selected_style);
+    f.render_stateful_widget(menus, rect, &mut ui_state.menu_state);
+}
+
+fn render_settings<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
+    let items_style = match ui_state.focus {
+        Focus::Memory | Focus::Menu => Style::default().add_modifier(Modifier::DIM).fg(Color::DarkGray),
+        Focus::Setting | Focus::Edit => Style::default(),
+    };
+    let selected_menu = get_selected_menu(config, ui_state);
+    let settings: Vec<ListItem> = selected_menu
+        .settings
+        .iter()
+        .map(|m| {
+            let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
+            ListItem::new(content).style(items_style)
+        })
+        .collect();
+    ui_state
+        .setting_state
+        .select(Some(ui_state.setting.0.get(nr_settings(config, ui_state))));
+    let selected_style = if ui_state.focus == Focus::Edit {
+        items_style.fg(Color::Red)
+    } else {
+        items_style.add_modifier(Modifier::REVERSED)
+    };
+    let settings = List::new(settings)
+        .block(Block::default().borders(Borders::ALL).title("SETTINGS"))
+        .highlight_style(selected_style);
+    f.render_stateful_widget(settings, rect, &mut ui_state.setting_state);
 }

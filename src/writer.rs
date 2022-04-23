@@ -4,8 +4,7 @@ use std::io;
 use std::io::Write;
 
 pub fn write(filename: &str, config: model::Config) -> Result<(), String> {
-    _write(filename, config)
-        .map_err(|e| format!("Error while writing: {}", e))
+    _write(filename, config).map_err(|e| format!("Error while writing: {}", e))
 }
 
 fn _write(filename: &str, config: model::Config) -> io::Result<()> {
@@ -18,11 +17,7 @@ fn _write(filename: &str, config: model::Config) -> io::Result<()> {
         for menu in mem.menus {
             writeln!(&mut file, "<{}>", menu.name)?;
             for setting in menu.settings {
-                writeln!(
-                    &mut file,
-                    "\t<{}>{}</{}>",
-                    setting.key, setting.value, setting.key
-                )?;
+                writeln!(&mut file, "\t<{}>{}</{}>", setting.key, setting.value, setting.key)?;
             }
             writeln!(&mut file, "</{}>", menu.name)?;
         }

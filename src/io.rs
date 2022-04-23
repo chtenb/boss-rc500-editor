@@ -10,15 +10,13 @@ const DEVICE_NAME: &str = "BOSS_RC-500";
 pub fn pull(working_dir: &str) -> Result<(), String> {
     match list_devices() {
         Err(e) => Err(format!("Could not retrieve any device info: {:?}", e).to_string()),
-        Ok(devs) => {
-            match ask_pull(&devs) {
-                None => {
-                    println!("No device chosen. Exiting.");
-                    Ok(())
-                }
-                Some(dev) => do_pull(&dev.path, working_dir),
+        Ok(devs) => match ask_pull(&devs) {
+            None => {
+                println!("No device chosen. Exiting.");
+                Ok(())
             }
-        }
+            Some(dev) => do_pull(&dev.path, working_dir),
+        },
     }
 }
 
@@ -43,8 +41,7 @@ fn ask_pull(devs: &Vec<Device>) -> Option<Device> {
 }
 
 fn list_devices() -> WindowsResult<Vec<Device>> {
-    let fetch_infos =
-        DeviceInformation::FindAllAsyncDeviceClass(DeviceClass::PortableStorageDevice)?;
+    let fetch_infos = DeviceInformation::FindAllAsyncDeviceClass(DeviceClass::PortableStorageDevice)?;
     let infos = fetch_infos.get()?;
     let nr_devs = infos.Size()?;
     println!("Found {:?} devices", nr_devs);
@@ -73,9 +70,7 @@ fn do_pull(device_root: &str, destination: &str) -> Result<(), String> {
     let from = PathBuf::new()
         .join(device_root)
         .join(Path::new(r"ROLAND\DATA\MEMORY1.RC0"));
-    let to = PathBuf::new()
-        .join(destination)
-        .join(Path::new(r"config.xml"));
+    let to = PathBuf::new().join(destination).join(Path::new(r"config.xml"));
     println!("Copying {:?} to {:?}", from, to);
     match fs::copy(from, to) {
         Err(e) => Err(format!("Error occurred while trying to copy data: {:?}", e)),
