@@ -34,7 +34,7 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
                 text.parse::<usize>()
                     .map_err(|_e| format!("Id attribute is not an int, but: {}.", text))
             })?;
-        let mut menus: Vec<model::UntypedMenu> = Vec::new();
+        let mut menus: Vec<model::Menu> = Vec::new();
         for menu_node in mem_node.children().filter(|c| c.is_element()) {
             let mut settings: Vec<model::UntypedKeyValue> = Vec::new();
             for setting_node in menu_node.children().filter(|c| c.is_element()) {
@@ -49,9 +49,14 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
                 let setting = model::UntypedKeyValue { key: key, value: value };
                 settings.push(setting);
             }
-            let menu = model::UntypedMenu {
-                name: menu_node.tag_name().name().to_string(),
-                settings: settings,
+            let name = menu_node.tag_name().name().to_string();
+            let menu = if name == "NAME" {
+                read_string_menu(name, settings)
+            } else {
+                model::Menu {
+                    name: name,
+                    content: model::MenuContent::KeyValueMenu(model::UntypedMenu { settings: settings }),
+                }
             };
             menus.push(menu);
         }
@@ -59,4 +64,12 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
         memories.push(memory);
     }
     Ok(model::Config { memories: memories })
+}
+
+fn read_string_menu(name: String, settings: Vec<model::UntypedKeyValue>) -> model::Menu {
+    let value = String::from_iter(settings.into_iter().map(|kv| (kv.value as u8) as char));
+    model::Menu {
+        name: name,
+        content: model::MenuContent::StringValueMenu(model::StringValueMenu { value: value }),
+    }
 }

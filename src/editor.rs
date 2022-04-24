@@ -77,33 +77,36 @@ fn nr_menus(config: &model::Config) -> usize {
     config.memories[0].menus.len()
 }
 
-fn nr_settings(config: &model::Config, ui_state: &UiState) -> usize {
-    get_selected_menu(config, ui_state).settings.len()
-}
-
 fn get_selected_memory<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a model::Memory {
     &config.memories[ui_state.memory.0.get(nr_memories(config))]
 }
 
-fn get_selected_menu<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a model::UntypedMenu {
+fn get_selected_memory_mut<'a>(config: &'a mut model::Config, ui_state: &UiState) -> &'a mut model::Memory {
+    let nr_memories = config.memories.len();
+    &mut config.memories[ui_state.memory.0.get(nr_memories)]
+}
+
+fn get_selected_menu<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a model::Menu {
     let selected_memory = get_selected_memory(config, ui_state);
     &selected_memory.menus[ui_state.menu.0.get(nr_menus(config))]
 }
 
-fn get_selected_setting_mut<'a>(config: &'a mut model::Config, ui_state: &UiState) -> &'a mut model::UntypedKeyValue {
-    let nr_memories = nr_memories(config);
-    let nr_menus = nr_menus(config);
-    let selected_memory = &mut config.memories[ui_state.memory.0.get(nr_memories)];
-    let selected_menu = &mut selected_memory.menus[ui_state.menu.0.get(nr_menus)];
-    &mut selected_menu.settings[ui_state.setting.0.get(nr_menus)]
+fn get_selected_menu_mut<'a>(config: &'a mut model::Config, ui_state: &UiState) -> &'a mut model::Menu {
+    let selected_memory = get_selected_memory_mut(config, ui_state);
+    let nr_menus = selected_memory.menus.len();
+    &mut selected_memory.menus[ui_state.menu.0.get(nr_menus)]
 }
 
-fn get_selected_setting<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a model::UntypedKeyValue {
-    let nr_memories = nr_memories(config);
-    let nr_menus = nr_menus(config);
-    let selected_memory = &config.memories[ui_state.memory.0.get(nr_memories)];
-    let selected_menu = &selected_memory.menus[ui_state.menu.0.get(nr_menus)];
-    &selected_menu.settings[ui_state.setting.0.get(nr_menus)]
+fn get_selected_setting<'a>(menu: &'a model::UntypedMenu, ui_state: &UiState) -> &'a model::UntypedKeyValue {
+    &menu.settings[ui_state.setting.0.get(menu.settings.len())]
+}
+
+fn get_selected_setting_mut<'a>(
+    menu: &'a mut model::UntypedMenu,
+    ui_state: &UiState,
+) -> &'a mut model::UntypedKeyValue {
+    let nr_settings = menu.settings.len();
+    &mut menu.settings[ui_state.setting.0.get(nr_settings)]
 }
 
 pub fn init(config: &mut model::Config) -> Result<(), Box<dyn Error>> {
@@ -151,7 +154,7 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
         Focus::Memory => match key.code {
             KeyCode::Up => ui_state.memory.0.dec(nr_memories(config)),
             KeyCode::Down => ui_state.memory.0.inc(nr_memories(config)),
-            KeyCode::Right => ui_state.focus = Focus::Menu,
+            KeyCode::Right | KeyCode::Enter => ui_state.focus = Focus::Menu,
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
@@ -159,30 +162,64 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
             KeyCode::Up => ui_state.menu.0.dec(nr_menus(config)),
             KeyCode::Down => ui_state.menu.0.inc(nr_menus(config)),
             KeyCode::Left => ui_state.focus = Focus::Memory,
-            KeyCode::Right => ui_state.focus = Focus::Setting,
+            KeyCode::Right | KeyCode::Enter => {
+                let menu = get_selected_menu(config, ui_state);
+                match &menu.content {
+                    model::MenuContent::StringValueMenu(_) => ui_state.focus = Focus::Edit,
+                    model::MenuContent::KeyValueMenu(_) => ui_state.focus = Focus::Setting,
+                }
+            }
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
-        Focus::Setting => match key.code {
-            KeyCode::Up => ui_state.setting.0.dec(nr_settings(config, ui_state)),
-            KeyCode::Down => ui_state.setting.0.inc(nr_settings(config, ui_state)),
-            KeyCode::Left => ui_state.focus = Focus::Menu,
-            KeyCode::Enter => ui_state.focus = Focus::Edit,
-            KeyCode::Char('q') => return Err(()),
-            _ => {}
-        },
-        Focus::Edit => match key.code {
-            KeyCode::Up => {
-                let setting = get_selected_setting_mut(config, ui_state);
-                setting.value += 1;
+        Focus::Setting => {
+            let menu = get_selected_menu(config, ui_state);
+            match &menu.content {
+                model::MenuContent::StringValueMenu(_) => {
+                    // This is an invalid state, so move back
+                    ui_state.focus = Focus::Memory;
+                }
+                model::MenuContent::KeyValueMenu(menu) => match key.code {
+                    KeyCode::Up => ui_state.setting.0.dec(menu.settings.len()),
+                    KeyCode::Down => ui_state.setting.0.inc(menu.settings.len()),
+                    KeyCode::Left => ui_state.focus = Focus::Menu,
+                    KeyCode::Enter => ui_state.focus = Focus::Edit,
+                    KeyCode::Char('q') => return Err(()),
+                    _ => {}
+                },
             }
-            KeyCode::Down => {
-                let setting = get_selected_setting_mut(config, ui_state);
-                setting.value -= 1;
+        }
+        Focus::Edit => {
+            let menu = get_selected_menu_mut(config, ui_state);
+            match &mut menu.content {
+                model::MenuContent::KeyValueMenu(ref mut menu) => match key.code {
+                    KeyCode::Up => {
+                        let setting = get_selected_setting_mut(menu, ui_state);
+                        setting.value += 1;
+                    }
+                    KeyCode::Down => {
+                        let setting = get_selected_setting_mut(menu, ui_state);
+                        setting.value -= 1;
+                    }
+                    KeyCode::Enter | KeyCode::Esc => ui_state.focus = Focus::Setting,
+                    _ => {}
+                },
+                model::MenuContent::StringValueMenu(ref mut menu) => match key.code {
+                    KeyCode::Backspace => {
+                        let mut chars = menu.value.chars();
+                        chars.next_back();
+                        menu.value = chars.as_str().to_string();
+                    }
+                    KeyCode::Enter | KeyCode::Esc => ui_state.focus = Focus::Menu,
+                    KeyCode::Char(c) => {
+                        let mut chars: Vec<char> = menu.value.chars().collect();
+                        chars.push(c);
+                        menu.value = String::from_iter(chars.into_iter().map(|c| (c as u8) as char));
+                    }
+                    _ => {}
+                },
             }
-            KeyCode::Enter | KeyCode::Esc => ui_state.focus = Focus::Setting,
-            _ => {}
-        },
+        }
     }
     Ok(())
 }
@@ -239,18 +276,24 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
 }
 
 fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
-    let selected_setting = get_selected_setting(config, ui_state);
-    let (description, style) = (
-        match model::DESCRIPTIONS.get(&selected_setting.key) {
-            Some(text) => vec![Span::styled(*text, Style::default())],
-            None => vec![Span::styled("-", Style::default())],
-        },
-        Style::default(),
-    );
-    let mut text = Text::from(Spans::from(description));
-    text.patch_style(style);
-    let msg = Paragraph::new(text).block(Block::default().title("DESCRIPTION").borders(Borders::ALL));
-    f.render_widget(msg, rect);
+    let selected_menu = get_selected_menu(config, ui_state);
+    match &selected_menu.content {
+        model::MenuContent::KeyValueMenu(selected_menu) => {
+            let selected_setting = get_selected_setting(selected_menu, ui_state);
+            let (description, style) = (
+                match model::DESCRIPTIONS.get(&selected_setting.key) {
+                    Some(text) => vec![Span::styled(*text, Style::default())],
+                    None => vec![Span::styled("-", Style::default())],
+                },
+                Style::default(),
+            );
+            let mut text = Text::from(Spans::from(description));
+            text.patch_style(style);
+            let msg = Paragraph::new(text).block(Block::default().title("DESCRIPTION").borders(Borders::ALL));
+            f.render_widget(msg, rect);
+        }
+        _ => {}
+    }
 }
 
 fn render_memories<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
@@ -301,24 +344,39 @@ fn render_settings<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Con
         Focus::Setting | Focus::Edit => Style::default(),
     };
     let selected_menu = get_selected_menu(config, ui_state);
-    let settings: Vec<ListItem> = selected_menu
-        .settings
-        .iter()
-        .map(|m| {
-            let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
-            ListItem::new(content).style(items_style)
-        })
-        .collect();
-    ui_state
-        .setting_state
-        .select(Some(ui_state.setting.0.get(nr_settings(config, ui_state))));
-    let selected_style = if ui_state.focus == Focus::Edit {
-        items_style.fg(Color::Red)
-    } else {
-        items_style.add_modifier(Modifier::REVERSED)
-    };
-    let settings = List::new(settings)
-        .block(Block::default().borders(Borders::ALL).title("SETTINGS"))
-        .highlight_style(selected_style);
-    f.render_stateful_widget(settings, rect, &mut ui_state.setting_state);
+    match &selected_menu.content {
+        model::MenuContent::KeyValueMenu(selected_menu) => {
+            let settings: Vec<ListItem> = selected_menu
+                .settings
+                .iter()
+                .map(|m| {
+                    let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
+                    ListItem::new(content).style(items_style)
+                })
+                .collect();
+            ui_state
+                .setting_state
+                .select(Some(ui_state.setting.0.get(selected_menu.settings.len())));
+            let selected_style = if ui_state.focus == Focus::Edit {
+                items_style.fg(Color::Red)
+            } else {
+                items_style.add_modifier(Modifier::REVERSED)
+            };
+            let settings = List::new(settings)
+                .block(Block::default().borders(Borders::ALL).title("SETTINGS"))
+                .highlight_style(selected_style);
+            f.render_stateful_widget(settings, rect, &mut ui_state.setting_state);
+        }
+        model::MenuContent::StringValueMenu(selected_menu) => {
+            let mut value = selected_menu.value.to_string();
+            let mut style = Style::default();
+            if ui_state.focus == Focus::Edit {
+                style = Style::default().fg(Color::Red);
+                value = value + "_"
+            }
+            let text = Text::from(Spans::from(vec![Span::styled(value, style)]));
+            let msg = Paragraph::new(text).block(Block::default().title("NAME").borders(Borders::ALL));
+            f.render_widget(msg, rect);
+        }
+    }
 }

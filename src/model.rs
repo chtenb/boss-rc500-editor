@@ -8,13 +8,29 @@ pub struct Config {
 #[derive(Clone, Debug)]
 pub struct Memory {
     pub id: usize, // This could be implicit
-    pub menus: Vec<UntypedMenu>,
+    pub menus: Vec<Menu>,
 }
 
 #[derive(Clone, Debug)]
 pub struct UntypedMenu {
-    pub name: String,
     pub settings: Vec<UntypedKeyValue>,
+}
+
+#[derive(Clone, Debug)]
+pub struct StringValueMenu {
+    pub value: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Menu {
+    pub name: String,
+    pub content: MenuContent,
+}
+
+#[derive(Clone, Debug)]
+pub enum MenuContent {
+    StringValueMenu(StringValueMenu),
+    KeyValueMenu(UntypedMenu),
 }
 
 #[derive(Clone, Debug)]
@@ -22,29 +38,6 @@ pub struct UntypedKeyValue {
     pub key: String,
     pub value: usize,
 }
-
-// const descriptions: HashMap<&str, &str> = HashMap::from([
-//     ("Rev", ""),
-//     ("PlyLvl", "Loudness of the track"),
-//     ("Pan", "Below 50 is left above 50 is right"),
-//     ("One", ""),
-// ]);
-
-// pub struct Range {
-//     // Inclusive
-//     upper_bound: i32,
-// }
-
-// impl Range {
-//     pub fn in_range(&self, n: i32) -> bool {
-//         n <= self.upper_bound
-//     }
-//     pub fn new(upper_bound: i32) -> Range {
-//         Range {
-//             upper_bound: upper_bound,
-//         }
-//     }
-// }
 
 pub static DESCRIPTIONS: phf::Map<&'static str, &'static str> = phf_map! {
     "Rev" => "T1 REVERSE",
@@ -94,6 +87,6 @@ macro_rules! vec_of_strings {
     });
 }
 
-pub static DISPLAY_VALUES: phf::Map<&'static str, Vec<&'static str>> = phf_map! {
-    "Rev" => vec_of_strings!["NO", "YES"],
-};
+// pub static DISPLAY_VALUES: phf::Map<&'static str, Vec<&'static str>> = phf_map! {
+//     "Rev" => vec_of_strings!["NO", "YES"],
+// };
