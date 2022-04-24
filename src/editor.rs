@@ -98,6 +98,14 @@ fn get_selected_setting_mut<'a>(config: &'a mut model::Config, ui_state: &UiStat
     &mut selected_menu.settings[ui_state.setting.0.get(nr_menus)]
 }
 
+fn get_selected_setting<'a>(config: &'a model::Config, ui_state: &UiState) -> &'a model::UntypedKeyValue {
+    let nr_memories = nr_memories(config);
+    let nr_menus = nr_menus(config);
+    let selected_memory = &config.memories[ui_state.memory.0.get(nr_memories)];
+    let selected_menu = &selected_memory.menus[ui_state.menu.0.get(nr_menus)];
+    &selected_menu.settings[ui_state.setting.0.get(nr_menus)]
+}
+
 pub fn init(config: &mut model::Config) -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
@@ -231,8 +239,12 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
 }
 
 fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
+    let selected_setting = get_selected_setting(config, ui_state);
     let (description, style) = (
-        vec![Span::styled("Description here", Style::default())],
+        match model::DESCRIPTIONS.get(&selected_setting.key) {
+            Some(text) => vec![Span::styled(*text, Style::default())],
+            None => vec![Span::styled("-", Style::default())],
+        },
         Style::default(),
     );
     let mut text = Text::from(Spans::from(description));
