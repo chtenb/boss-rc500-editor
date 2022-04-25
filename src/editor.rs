@@ -4,7 +4,6 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::cmp::max;
 use std::cmp::min;
 use std::{error::Error, io};
 use tui::layout::Rect;
@@ -205,7 +204,7 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                 Err(_) => {}
             },
             KeyCode::Char('s') => {
-                save(config, ui_state);
+                let _ = save(config, ui_state);
             }
             _ => {}
         },

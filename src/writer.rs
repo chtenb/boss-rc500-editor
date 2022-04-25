@@ -20,7 +20,7 @@ fn _write(filename: &str, config: &model::Config) -> io::Result<()> {
                 model::MenuContent::StringValueMenu(menu) => write_string_menu(&mut file, menu)?,
                 model::MenuContent::KeyValueMenu(menu) => write_key_value_menu(&mut file, menu)?,
             };
-            writeln!(&mut file, "</{}>", menu.name);
+            writeln!(&mut file, "</{}>", menu.name)?;
         }
         writeln!(&mut file, "</mem>")?;
     }

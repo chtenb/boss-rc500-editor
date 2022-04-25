@@ -38,7 +38,11 @@ fn main() {
         } => io::pull(&working_dir),
         Command::Push => Err("Not implemented".to_string()),
         Command::Edit { filename } => {
-            reader::read(&filename).and_then(|mut config| editor::init(&mut config).map_err(|e| format!("{:?}", e)));
+            let res = reader::read(&filename)
+                .and_then(|mut config| editor::init(&mut config).map_err(|e| format!("{:?}", e)));
+            if let Err(err) = res {
+                println!("{:?}", err)
+            }
             Ok(())
         }
     };
