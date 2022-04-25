@@ -2,6 +2,7 @@ use phf::phf_map;
 
 #[derive(Clone, Debug)]
 pub struct Config {
+    pub filename: String,
     pub memories: Vec<Memory>,
 }
 
@@ -64,15 +65,12 @@ pub static DISPLAY_KEYS: phf::Map<&'static str, &'static str> = phf_map! {
     "PlyLvl" => "Playback Level",
     "Pan" => "Pan",
     "One" => "1Shot",
-    "LoopFx" => "",
+    "LoopFx" => "Loop FX",
     "StrtMod" => "Start",
     "StpMod" => "Stop",
-    "Measure" => "",
-    "LoopSync" => "",
-    "TempoSync" => "",
 };
 
-pub static BOUNDS: phf::Map<&'static str, i32> = phf_map! {
+pub static BOUNDS: phf::Map<&'static str, usize> = phf_map! {
     "Rev" => 1,
     "PlyLvl" => 100,
     "Pan" => 100,
@@ -85,15 +83,8 @@ pub static BOUNDS: phf::Map<&'static str, i32> = phf_map! {
     "TempoSync" => 1,
 };
 
-macro_rules! vec_of_strings {
-    // match a list of expressions separated by comma:
-    ($($str:expr),*) => ({
-        // create a Vec with this list of expressions,
-        // calling String::from on each:
-        vec![$($str,)*] as Vec<&str>
-    });
-}
-
-// pub static DISPLAY_VALUES: phf::Map<&'static str, Vec<&'static str>> = phf_map! {
-//     "Rev" => vec_of_strings!["NO", "YES"],
-// };
+pub static DISPLAY_VALUES: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    "Rev" => &["NO", "YES"],
+    "LoopSync" => &["NO", "YES"],
+    "TempoSync" => &["NO", "YES"],
+};

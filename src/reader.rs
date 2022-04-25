@@ -6,7 +6,7 @@ pub fn read(filename: &str) -> Result<model::Config, String> {
     text = text.replace("6!", "");
     roxmltree::Document::parse(&text)
         .map_err(|e| format!("Parsing error: {}.", e))
-        .and_then(|v| doc_to_config(v))
+        .and_then(|v| doc_to_config(v, filename))
 }
 
 fn validate_mem_node(node: roxmltree::Node) -> Result<(), String> {
@@ -19,7 +19,7 @@ fn validate_mem_node(node: roxmltree::Node) -> Result<(), String> {
     }
 }
 
-fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
+fn doc_to_config(doc: roxmltree::Document, filename: &str) -> Result<model::Config, String> {
     let mut memories: Vec<model::Memory> = Vec::new();
     let database = doc
         .root()
@@ -63,7 +63,10 @@ fn doc_to_config(doc: roxmltree::Document) -> Result<model::Config, String> {
         let memory = model::Memory { id: id, menus: menus };
         memories.push(memory);
     }
-    Ok(model::Config { memories: memories })
+    Ok(model::Config {
+        filename: filename.to_string(),
+        memories: memories,
+    })
 }
 
 fn read_string_menu(name: String, settings: Vec<model::UntypedKeyValue>) -> model::Menu {

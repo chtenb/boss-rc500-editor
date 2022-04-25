@@ -4,6 +4,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use std::cmp::max;
 use std::cmp::min;
 use std::{error::Error, io};
 use tui::layout::Rect;
@@ -19,6 +20,7 @@ use tui::{
 
 use crate::arith;
 use crate::model;
+use crate::writer;
 
 #[derive(Debug, PartialEq, Eq)]
 enum Focus {
@@ -171,13 +173,18 @@ fn run_app<B: Backend>(
     }
 }
 
+fn save(config: &mut model::Config, ui_state: &mut UiState) -> Result<(), ()> {
+    writer::write(&config.filename, config)
+        .map_err(|e| post_message(ui_state, &format!("Error saving to file: {:?}", e)))
+}
+
 fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEvent) -> Result<(), ()> {
     clear_message(ui_state);
     match ui_state.focus {
         Focus::Memory => match key.code {
-            KeyCode::Up => ui_state.memory.0.dec(nr_memories(config)),
-            KeyCode::Down => ui_state.memory.0.inc(nr_memories(config)),
-            KeyCode::Right | KeyCode::Enter => ui_state.focus = Focus::Menu,
+            KeyCode::Up | KeyCode::Char('k') => ui_state.memory.0.dec(nr_memories(config)),
+            KeyCode::Down | KeyCode::Char('j') => ui_state.memory.0.inc(nr_memories(config)),
+            KeyCode::Right | KeyCode::Enter | KeyCode::Char('l') => ui_state.focus = Focus::Menu,
             KeyCode::Char('y') => {
                 let memory = get_selected_memory(config, ui_state);
                 ui_state.clipboard = Clipboard::CopiedMemory(memory.clone());
@@ -192,14 +199,21 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                     post_message(ui_state, "Pasted memory in clipboard to selected memory!");
                 }
             },
-            KeyCode::Char('q') => return Err(()),
+            KeyCode::Char('!') => return Err(()),
+            KeyCode::Char('q') => match save(config, ui_state) {
+                Ok(_) => return Err(()),
+                Err(_) => {}
+            },
+            KeyCode::Char('s') => {
+                save(config, ui_state);
+            }
             _ => {}
         },
         Focus::Menu => match key.code {
-            KeyCode::Up => ui_state.menu.0.dec(nr_menus(config)),
-            KeyCode::Down => ui_state.menu.0.inc(nr_menus(config)),
-            KeyCode::Left => ui_state.focus = Focus::Memory,
-            KeyCode::Right | KeyCode::Enter => {
+            KeyCode::Up | KeyCode::Char('k') => ui_state.menu.0.dec(nr_menus(config)),
+            KeyCode::Down | KeyCode::Char('j') => ui_state.menu.0.inc(nr_menus(config)),
+            KeyCode::Left | KeyCode::Char('h') => ui_state.focus = Focus::Memory,
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => {
                 let menu = get_selected_menu(config, ui_state);
                 match &menu.content {
                     model::MenuContent::StringValueMenu(_) => ui_state.focus = Focus::Edit,
@@ -217,10 +231,10 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                     ui_state.focus = Focus::Memory;
                 }
                 model::MenuContent::KeyValueMenu(menu) => match key.code {
-                    KeyCode::Up => ui_state.setting.0.dec(menu.settings.len()),
-                    KeyCode::Down => ui_state.setting.0.inc(menu.settings.len()),
-                    KeyCode::Left => ui_state.focus = Focus::Menu,
-                    KeyCode::Enter => ui_state.focus = Focus::Edit,
+                    KeyCode::Up | KeyCode::Char('k') => ui_state.setting.0.dec(menu.settings.len()),
+                    KeyCode::Down | KeyCode::Char('j') => ui_state.setting.0.inc(menu.settings.len()),
+                    KeyCode::Left | KeyCode::Char('h') => ui_state.focus = Focus::Menu,
+                    KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => ui_state.focus = Focus::Edit,
                     KeyCode::Char('q') => return Err(()),
                     _ => {}
                 },
@@ -232,13 +246,22 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                 model::MenuContent::KeyValueMenu(ref mut menu) => match key.code {
                     KeyCode::Up => {
                         let setting = get_selected_setting_mut(menu, ui_state);
-                        setting.value += 1;
+                        let key: &str = &setting.key;
+                        let upper_bound = model::BOUNDS.get(key);
+                        match upper_bound {
+                            None => setting.value += 1,
+                            Some(bound) => setting.value = min(*bound, setting.value + 1),
+                        }
                     }
                     KeyCode::Down => {
                         let setting = get_selected_setting_mut(menu, ui_state);
-                        setting.value -= 1;
+                        if setting.value > 0 {
+                            setting.value -= 1;
+                        }
                     }
-                    KeyCode::Enter | KeyCode::Esc | KeyCode::Left => ui_state.focus = Focus::Setting,
+                    KeyCode::Enter | KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => {
+                        ui_state.focus = Focus::Setting
+                    }
                     _ => {}
                 },
                 model::MenuContent::StringValueMenu(ref mut menu) => match key.code {
@@ -299,13 +322,12 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
     } else {
         (
             vec![
-                Span::raw("Press "),
                 Span::styled("q", Style::default().fg(Color::Red)),
-                Span::raw(" to exit, "),
-                Span::raw("press "),
+                Span::raw(" to save and exit, "),
+                Span::styled("!", Style::default().fg(Color::Red)),
+                Span::raw(" to exit without saving, "),
                 Span::styled("y", Style::default().fg(Color::Red)),
                 Span::raw(" to copy a memory, "),
-                Span::raw("press "),
                 Span::styled("p", Style::default().fg(Color::Red)),
                 Span::raw(" to paste a memory"),
             ],
@@ -405,8 +427,15 @@ fn render_settings<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Con
             let settings: Vec<ListItem> = selected_menu
                 .settings
                 .iter()
-                .map(|m| {
-                    let content = vec![Spans::from(Span::raw(format!("{} = {}", m.key, m.value)))];
+                .map(|s| {
+                    let key: &str = &s.key;
+                    let value_str: &str = &format!("{}", s.value);
+                    let display_key: &str = model::DISPLAY_KEYS.get(key).unwrap_or(&key);
+                    let display_value: &str = model::DISPLAY_VALUES
+                        .get(key)
+                        .and_then(|values| values.get(s.value))
+                        .unwrap_or(&value_str);
+                    let content = vec![Spans::from(Span::raw(format!("{} = {}", display_key, display_value)))];
                     ListItem::new(content).style(items_style)
                 })
                 .collect();

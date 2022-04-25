@@ -24,9 +24,6 @@ enum Command {
         overwrite: bool,
     },
     Push,
-    ReadWrite {
-        filename: String,
-    },
     Edit {
         filename: String,
     },
@@ -40,7 +37,6 @@ fn main() {
             overwrite: _,
         } => io::pull(&working_dir),
         Command::Push => Err("Not implemented".to_string()),
-        Command::ReadWrite { filename } => reader::read(&filename).and_then(|config| writer::write(&filename, config)),
         Command::Edit { filename } => {
             reader::read(&filename).and_then(|mut config| editor::init(&mut config).map_err(|e| format!("{:?}", e)));
             Ok(())
