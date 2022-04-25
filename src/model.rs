@@ -11,6 +11,13 @@ pub struct Memory {
     pub menus: Vec<Menu>,
 }
 
+pub fn get_memory_name(memory: &Memory) -> &str {
+    match &memory.menus[0].content {
+        MenuContent::StringValueMenu(menu) => menu.value.as_ref(),
+        _ => "",
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct UntypedMenu {
     pub settings: Vec<UntypedKeyValue>,

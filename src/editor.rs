@@ -57,16 +57,38 @@ struct MenuIndex(BoundedIndex);
 #[derive(Default)]
 struct SettingIndex(BoundedIndex);
 
+enum Clipboard {
+    Empty,
+    CopiedMenu(model::Menu),
+    CopiedMemory(model::Memory),
+}
+
+impl Default for Clipboard {
+    fn default() -> Clipboard {
+        Clipboard::Empty
+    }
+}
+
 #[derive(Default)]
 struct UiState {
     memory: MemoryIndex,
     menu: MenuIndex,
     setting: SettingIndex,
     focus: Focus,
+    clipboard: Clipboard,
+    message: Option<String>,
 
     memory_state: ListState,
     menu_state: ListState,
     setting_state: ListState,
+}
+
+fn clear_message(ui_state: &mut UiState) {
+    ui_state.message = None
+}
+
+fn post_message(ui_state: &mut UiState, msg: &str) {
+    ui_state.message = Some(msg.to_string());
 }
 
 fn nr_memories(config: &model::Config) -> usize {
@@ -150,11 +172,26 @@ fn run_app<B: Backend>(
 }
 
 fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEvent) -> Result<(), ()> {
+    clear_message(ui_state);
     match ui_state.focus {
         Focus::Memory => match key.code {
             KeyCode::Up => ui_state.memory.0.dec(nr_memories(config)),
             KeyCode::Down => ui_state.memory.0.inc(nr_memories(config)),
             KeyCode::Right | KeyCode::Enter => ui_state.focus = Focus::Menu,
+            KeyCode::Char('y') => {
+                let memory = get_selected_memory(config, ui_state);
+                ui_state.clipboard = Clipboard::CopiedMemory(memory.clone());
+                post_message(ui_state, "Copied memory to clipboard!");
+            }
+            KeyCode::Char('p') => match &ui_state.clipboard {
+                Clipboard::Empty => {}
+                Clipboard::CopiedMenu(_) => {}
+                Clipboard::CopiedMemory(copied) => {
+                    let nr_memories = config.memories.len();
+                    config.memories[ui_state.memory.0.get(nr_memories)] = copied.clone();
+                    post_message(ui_state, "Pasted memory in clipboard to selected memory!");
+                }
+            },
             KeyCode::Char('q') => return Err(()),
             _ => {}
         },
@@ -201,7 +238,7 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                         let setting = get_selected_setting_mut(menu, ui_state);
                         setting.value -= 1;
                     }
-                    KeyCode::Enter | KeyCode::Esc => ui_state.focus = Focus::Setting,
+                    KeyCode::Enter | KeyCode::Esc | KeyCode::Left => ui_state.focus = Focus::Setting,
                     _ => {}
                 },
                 model::MenuContent::StringValueMenu(ref mut menu) => match key.code {
@@ -210,7 +247,7 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                         chars.next_back();
                         menu.value = chars.as_str().to_string();
                     }
-                    KeyCode::Enter | KeyCode::Esc => ui_state.focus = Focus::Menu,
+                    KeyCode::Enter | KeyCode::Esc | KeyCode::Left => ui_state.focus = Focus::Menu,
                     KeyCode::Char(c) => {
                         let mut chars: Vec<char> = menu.value.chars().collect();
                         chars.push(c);
@@ -264,7 +301,13 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
             vec![
                 Span::raw("Press "),
                 Span::styled("q", Style::default().fg(Color::Red)),
-                Span::raw(" to exit"),
+                Span::raw(" to exit, "),
+                Span::raw("press "),
+                Span::styled("y", Style::default().fg(Color::Red)),
+                Span::raw(" to copy a memory, "),
+                Span::raw("press "),
+                Span::styled("p", Style::default().fg(Color::Red)),
+                Span::raw(" to paste a memory"),
             ],
             Style::default(),
         )
@@ -276,23 +319,35 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
 }
 
 fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
-    let selected_menu = get_selected_menu(config, ui_state);
-    match &selected_menu.content {
-        model::MenuContent::KeyValueMenu(selected_menu) => {
-            let selected_setting = get_selected_setting(selected_menu, ui_state);
-            let (description, style) = (
-                match model::DESCRIPTIONS.get(&selected_setting.key) {
-                    Some(text) => vec![Span::styled(*text, Style::default())],
-                    None => vec![Span::styled("-", Style::default())],
-                },
-                Style::default(),
-            );
+    // Render message if existing, otherwise render setting description
+    match &ui_state.message {
+        Some(msg) => {
+            let (description, style) = (vec![Span::styled(msg, Style::default())], Style::default());
             let mut text = Text::from(Spans::from(description));
             text.patch_style(style);
-            let msg = Paragraph::new(text).block(Block::default().title("DESCRIPTION").borders(Borders::ALL));
+            let msg = Paragraph::new(text).block(Block::default().title("MESSAGE").borders(Borders::ALL));
             f.render_widget(msg, rect);
         }
-        _ => {}
+        None => {
+            let selected_menu = get_selected_menu(config, ui_state);
+            match &selected_menu.content {
+                model::MenuContent::KeyValueMenu(selected_menu) => {
+                    let selected_setting = get_selected_setting(selected_menu, ui_state);
+                    let (description, style) = (
+                        match model::DESCRIPTIONS.get(&selected_setting.key) {
+                            Some(text) => vec![Span::styled(*text, Style::default())],
+                            None => vec![Span::styled("-", Style::default())],
+                        },
+                        Style::default(),
+                    );
+                    let mut text = Text::from(Spans::from(description));
+                    text.patch_style(style);
+                    let msg = Paragraph::new(text).block(Block::default().title("DESCRIPTION").borders(Borders::ALL));
+                    f.render_widget(msg, rect);
+                }
+                _ => {}
+            }
+        }
     }
 }
 
@@ -302,7 +357,8 @@ fn render_memories<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Con
         .memories
         .iter()
         .map(|m| {
-            let content = vec![Spans::from(Span::raw(format!("MEMORY {}", m.id)))];
+            let name = model::get_memory_name(m);
+            let content = vec![Spans::from(Span::raw(format!("{}: {}", m.id, name)))];
             ListItem::new(content).style(items_style)
         })
         .collect();
@@ -369,7 +425,7 @@ fn render_settings<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Con
         }
         model::MenuContent::StringValueMenu(selected_menu) => {
             let mut value = selected_menu.value.to_string();
-            let mut style = Style::default();
+            let mut style = items_style;
             if ui_state.focus == Focus::Edit {
                 style = Style::default().fg(Color::Red);
                 value = value + "_"
