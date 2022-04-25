@@ -173,8 +173,17 @@ fn run_app<B: Backend>(
 }
 
 fn save(config: &mut model::Config, ui_state: &mut UiState) -> Result<(), ()> {
-    writer::write(&config.filename, config)
-        .map_err(|e| post_message(ui_state, &format!("Error saving to file: {:?}", e)))
+    post_message(ui_state, "Saving file...");
+    match writer::write(&config.filename, config) {
+        Ok(()) => {
+            post_message(ui_state, "File saved!");
+            return Ok(());
+        }
+        Err(e) => {
+            post_message(ui_state, &format!("Error saving to file: {:?}", e));
+            return Err(());
+        }
+    }
 }
 
 fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEvent) -> Result<(), ()> {
@@ -219,7 +228,14 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                     model::MenuContent::KeyValueMenu(_) => ui_state.focus = Focus::Setting,
                 }
             }
-            KeyCode::Char('q') => return Err(()),
+            KeyCode::Char('!') => return Err(()),
+            KeyCode::Char('q') => match save(config, ui_state) {
+                Ok(_) => return Err(()),
+                Err(_) => {}
+            },
+            KeyCode::Char('s') => {
+                let _ = save(config, ui_state);
+            }
             _ => {}
         },
         Focus::Setting => {
@@ -234,7 +250,14 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                     KeyCode::Down | KeyCode::Char('j') => ui_state.setting.0.inc(menu.settings.len()),
                     KeyCode::Left | KeyCode::Char('h') => ui_state.focus = Focus::Menu,
                     KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => ui_state.focus = Focus::Edit,
-                    KeyCode::Char('q') => return Err(()),
+                    KeyCode::Char('!') => return Err(()),
+                    KeyCode::Char('q') => match save(config, ui_state) {
+                        Ok(_) => return Err(()),
+                        Err(_) => {}
+                    },
+                    KeyCode::Char('s') => {
+                        let _ = save(config, ui_state);
+                    }
                     _ => {}
                 },
             }
@@ -321,6 +344,8 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
     } else {
         (
             vec![
+                Span::styled("s", Style::default().fg(Color::Red)),
+                Span::raw(" to save, "),
                 Span::styled("q", Style::default().fg(Color::Red)),
                 Span::raw(" to save and exit, "),
                 Span::styled("!", Style::default().fg(Color::Red)),
