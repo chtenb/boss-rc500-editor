@@ -7,7 +7,7 @@ use windows::Devices::Portable::StorageDevice;
 
 const DEVICE_NAME: &str = "BOSS_RC-500";
 
-pub fn pull(working_dir: &str) -> Result<(), String> {
+pub fn pull(filename: &str, overwrite: bool) -> Result<(), String> {
     match list_devices() {
         Err(e) => Err(format!("Could not retrieve any device info: {:?}", e).to_string()),
         Ok(devs) => match ask_pull(&devs) {
@@ -15,12 +15,12 @@ pub fn pull(working_dir: &str) -> Result<(), String> {
                 println!("No device chosen. Exiting.");
                 Ok(())
             }
-            Some(dev) => do_pull(&dev.path, working_dir),
+            Some(dev) => do_pull(&dev.path, filename),
         },
     }
 }
 
-pub fn push(working_dir: &str) -> Result<(), String> {
+pub fn push(filename: &str) -> Result<(), String> {
     match list_devices() {
         Err(e) => Err(format!("Could not retrieve any device info: {:?}", e).to_string()),
         Ok(devs) => match ask_push(&devs) {
@@ -28,7 +28,7 @@ pub fn push(working_dir: &str) -> Result<(), String> {
                 println!("No device chosen. Exiting.");
                 Ok(())
             }
-            Some(dev) => do_push(&dev.path, working_dir),
+            Some(dev) => do_push(&dev.path, filename),
         },
     }
 }
@@ -90,9 +90,9 @@ fn scan_device(info: DeviceInformation) -> WindowsResult<Device> {
     })
 }
 
-fn do_pull(device_root: &str, working_dir: &str) -> Result<(), String> {
+fn do_pull(device_root: &str, filename: &str) -> Result<(), String> {
     let from = device_path(device_root);
-    let to = config_file_path(working_dir);
+    let to = config_file_path(filename);
     println!("Copying {:?} to {:?}", from, to);
     match fs::copy(from, to) {
         Err(e) => Err(format!("Error occurred while trying to copy data: {:?}", e)),
@@ -103,8 +103,8 @@ fn do_pull(device_root: &str, working_dir: &str) -> Result<(), String> {
     }
 }
 
-fn do_push(device_root: &str, working_dir: &str) -> Result<(), String> {
-    let from = config_file_path(working_dir);
+fn do_push(device_root: &str, filename: &str) -> Result<(), String> {
+    let from = config_file_path(filename);
     let to = device_path(device_root);
     println!("Copying {:?} to {:?}", from, to);
     match fs::copy(from, to) {
@@ -121,6 +121,6 @@ fn device_path(device_root: &str) -> PathBuf {
         .join(device_root)
         .join(Path::new(r"ROLAND\DATA\MEMORY1.RC0"))
 }
-fn config_file_path(working_dir: &str) -> PathBuf {
-    PathBuf::new().join(working_dir).join(Path::new(r"config.xml"))
+fn config_file_path(filename: &str) -> PathBuf {
+    PathBuf::new().join(filename)
 }
