@@ -26,13 +26,16 @@ fn _write(filename: &str, config: &model::Config) -> io::Result<()> {
     }
 
     writeln!(&mut file, r#"</database>"#)?;
-    writeln!(&mut file, r#"6!  "#)?;
+    writeln!(&mut file, r#"6!  "#)?; // TODO: is this necessary?
     Ok(())
 }
 
 fn write_string_menu(file: &mut File, menu: &model::StringValueMenu) -> io::Result<()> {
     let mut i: i32 = 1;
-    for c in menu.value.chars() {
+    let mut value = menu.value.clone();
+    value.truncate(13);
+    value = format!("{:13}", value);
+    for c in value.chars() {
         writeln!(file, "\t<C{:02}>{}</C{:02}>", i, c as u8, i)?;
         i += 1;
     }

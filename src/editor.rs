@@ -203,7 +203,7 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                 Clipboard::CopiedMenu(_) => {}
                 Clipboard::CopiedMemory(copied) => {
                     let nr_memories = config.memories.len();
-                    config.memories[ui_state.memory.0.get(nr_memories)] = copied.clone();
+                    config.memories[ui_state.memory.0.get(nr_memories)].menus = copied.menus.clone();
                     post_message(ui_state, "Pasted memory in clipboard to selected memory!");
                 }
             },
@@ -404,7 +404,7 @@ fn render_memories<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Con
         .iter()
         .map(|m| {
             let name = model::get_memory_name(m);
-            let content = vec![Spans::from(Span::raw(format!("{}: {}", m.id, name)))];
+            let content = vec![Spans::from(Span::raw(format!("{}: {}", m.id + 1, name)))];
             ListItem::new(content).style(items_style)
         })
         .collect();

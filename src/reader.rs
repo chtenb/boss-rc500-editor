@@ -3,7 +3,13 @@ use roxmltree;
 
 pub fn read(filename: &str) -> Result<model::Config, String> {
     let mut text = std::fs::read_to_string(filename).map_err(|e| format!("Reading error: {}.", e))?;
-    text = text.replace("6!", "");
+    // The last for characters are not valid xml
+    // So remove them including newline
+    text.pop();
+    text.pop();
+    text.pop();
+    text.pop();
+    text.pop();
     roxmltree::Document::parse(&text)
         .map_err(|e| format!("Parsing error: {}.", e))
         .and_then(|v| doc_to_config(v, filename))

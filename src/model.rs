@@ -8,7 +8,7 @@ pub struct Config {
 
 #[derive(Clone, Debug)]
 pub struct Memory {
-    pub id: usize, // This could be implicit
+    pub id: usize,
     pub menus: Vec<Menu>,
 }
 
