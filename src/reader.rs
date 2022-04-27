@@ -77,8 +77,9 @@ fn doc_to_config(doc: roxmltree::Document, filename: &str) -> Result<model::Conf
 
 fn read_string_menu(name: String, settings: Vec<model::UntypedKeyValue>) -> model::Menu {
     let value = String::from_iter(settings.into_iter().map(|kv| (kv.value as u8) as char));
+    let trimmed = value.trim_end().to_string();
     model::Menu {
         name: name,
-        content: model::MenuContent::StringValueMenu(model::StringValueMenu { value: value }),
+        content: model::MenuContent::StringValueMenu(model::StringValueMenu { value: trimmed }),
     }
 }

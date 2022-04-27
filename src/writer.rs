@@ -33,8 +33,8 @@ fn _write(filename: &str, config: &model::Config) -> io::Result<()> {
 fn write_string_menu(file: &mut File, menu: &model::StringValueMenu) -> io::Result<()> {
     let mut i: i32 = 1;
     let mut value = menu.value.clone();
-    value.truncate(13);
-    value = format!("{:13}", value);
+    value.truncate(model::STRING_MAX_WIDTH);
+    value = format!("{:12}", value);
     for c in value.chars() {
         writeln!(file, "\t<C{:02}>{}</C{:02}>", i, c as u8, i)?;
         i += 1;

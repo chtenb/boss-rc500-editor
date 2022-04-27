@@ -295,8 +295,10 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                     KeyCode::Enter | KeyCode::Esc | KeyCode::Left => ui_state.focus = Focus::Menu,
                     KeyCode::Char(c) => {
                         let mut chars: Vec<char> = menu.value.chars().collect();
-                        chars.push(c);
-                        menu.value = String::from_iter(chars.into_iter().map(|c| (c as u8) as char));
+                        if chars.len() < model::STRING_MAX_WIDTH {
+                            chars.push(c);
+                            menu.value = String::from_iter(chars.into_iter().map(|c| (c as u8) as char));
+                        }
                     }
                     _ => {}
                 },

@@ -47,6 +47,8 @@ pub struct UntypedKeyValue {
     pub value: usize,
 }
 
+pub static STRING_MAX_WIDTH: usize = 12;
+
 pub static DESCRIPTIONS: phf::Map<&'static str, &'static str> = phf_map! {
     "Rev" => "T1 REVERSE",
     "PlyLvl" => "Loudness of the track",
