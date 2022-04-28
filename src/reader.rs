@@ -1,12 +1,13 @@
 use crate::model;
 use roxmltree;
+use std::path::Path;
 use std::str;
 
 fn find_subsequence(haystack: &Vec<u8>, needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|window| window == needle)
 }
 
-pub fn read(filename: &str) -> Result<model::Config, String> {
+pub fn read(filename: &Path) -> Result<model::Config, String> {
     // NOTE: read binary because the suffix can contain null bytes
     let text = &std::fs::read(filename).map_err(|e| format!("Reading error: {}.", e))?;
     // The suffix characters are not valid xml
@@ -16,9 +17,8 @@ pub fn read(filename: &str) -> Result<model::Config, String> {
     let xml = str::from_utf8(xml_bytes).map_err(|_| "XML was not valid utf8")?;
     let suffix = text[pivot..].to_vec();
 
-    roxmltree::Document::parse(&xml)
-        .map_err(|e| format!("Parsing error: {}.", e))
-        .and_then(|v| doc_to_config(v, filename, suffix))
+    let v = roxmltree::Document::parse(&xml).map_err(|e| format!("Parsing error: {}.", e))?;
+    doc_to_config(v, &filename.to_string_lossy(), suffix)
 }
 
 fn validate_mem_node(node: roxmltree::Node) -> Result<(), String> {

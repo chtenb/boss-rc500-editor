@@ -7,7 +7,7 @@ use windows::Devices::Portable::StorageDevice;
 
 const DEVICE_NAME: &str = "BOSS_RC-500";
 
-pub fn pull(filename: &str, overwrite: bool) -> Result<(), String> {
+pub fn pull(working_dir: &str, overwrite: bool) -> Result<(), String> {
     match list_devices() {
         Err(e) => Err(format!("Could not retrieve any device info: {:?}", e).to_string()),
         Ok(devs) => match ask_pull(&devs) {
@@ -15,12 +15,12 @@ pub fn pull(filename: &str, overwrite: bool) -> Result<(), String> {
                 println!("No device chosen. Exiting.");
                 Ok(())
             }
-            Some(dev) => do_pull(&dev.path, filename),
+            Some(dev) => do_pull(&dev.path, working_dir),
         },
     }
 }
 
-pub fn push(filename: &str) -> Result<(), String> {
+pub fn push(working_dir: &str) -> Result<(), String> {
     match list_devices() {
         Err(e) => Err(format!("Could not retrieve any device info: {:?}", e).to_string()),
         Ok(devs) => match ask_push(&devs) {
@@ -28,7 +28,7 @@ pub fn push(filename: &str) -> Result<(), String> {
                 println!("No device chosen. Exiting.");
                 Ok(())
             }
-            Some(dev) => do_push(&dev.path, filename),
+            Some(dev) => do_push(&dev.path, working_dir),
         },
     }
 }
@@ -90,11 +90,11 @@ fn scan_device(info: DeviceInformation) -> WindowsResult<Device> {
     })
 }
 
-fn do_pull(device_root: &str, filename: &str) -> Result<(), String> {
-    let from = device_path(device_root);
-    let to = config_file_path(filename);
+fn do_pull(device_root: &str, working_dir: &str) -> Result<(), String> {
+    let from = device_paths(device_root);
+    let to = config_file_paths(working_dir);
     println!("Copying {:?} to {:?}", from, to);
-    match fs::copy(from, to) {
+    match fs::copy(from.0, to.0).and_then(|_| fs::copy(from.1, to.1)) {
         Err(e) => Err(format!("Error occurred while trying to copy data: {:?}", e)),
         Ok(_v) => {
             println!("Successfully pulled data");
@@ -103,11 +103,11 @@ fn do_pull(device_root: &str, filename: &str) -> Result<(), String> {
     }
 }
 
-fn do_push(device_root: &str, filename: &str) -> Result<(), String> {
-    let from = config_file_path(filename);
-    let to = device_path(device_root);
+fn do_push(device_root: &str, working_dir: &str) -> Result<(), String> {
+    let from = config_file_paths(working_dir);
+    let to = device_paths(device_root);
     println!("Copying {:?} to {:?}", from, to);
-    match fs::copy(from, to) {
+    match fs::copy(from.0, to.0).and_then(|_| fs::copy(from.1, to.1)) {
         Err(e) => Err(format!("Error occurred while trying to copy data: {:?}", e)),
         Ok(_v) => {
             println!("Successfully pushed data");
@@ -116,11 +116,19 @@ fn do_push(device_root: &str, filename: &str) -> Result<(), String> {
     }
 }
 
-fn device_path(device_root: &str) -> PathBuf {
-    PathBuf::new()
-        .join(device_root)
-        .join(Path::new(r"ROLAND\DATA\MEMORY1.RC0"))
+fn device_paths(device_root: &str) -> (PathBuf, PathBuf) {
+    (
+        PathBuf::new()
+            .join(device_root)
+            .join(Path::new(r"ROLAND\DATA\MEMORY1.RC0")),
+        PathBuf::new()
+            .join(device_root)
+            .join(Path::new(r"ROLAND\DATA\MEMORY2.RC0")),
+    )
 }
-fn config_file_path(filename: &str) -> PathBuf {
-    PathBuf::new().join(filename)
+pub fn config_file_paths(working_dir: &str) -> (PathBuf, PathBuf) {
+    (
+        PathBuf::new().join(working_dir).join(Path::new(r"MEMORY1.RC0")),
+        PathBuf::new().join(working_dir).join(Path::new(r"MEMORY2.RC0")),
+    )
 }
