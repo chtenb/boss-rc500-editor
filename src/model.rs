@@ -3,6 +3,7 @@ use phf::phf_map;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub filename: String,
+    pub suffix: Vec<u8>,
     pub memories: Vec<Memory>,
 }
 

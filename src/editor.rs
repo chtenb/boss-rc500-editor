@@ -312,11 +312,20 @@ fn ui<B: Backend>(f: &mut Frame<B>, config: &model::Config, ui_state: &mut UiSta
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
-        .constraints([Constraint::Length(1), Constraint::Min(1), Constraint::Length(5)].as_ref())
+        .constraints(
+            [
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Min(1),
+                Constraint::Length(5),
+            ]
+            .as_ref(),
+        )
         .split(f.size());
 
-    render_help(f, chunks[0], ui_state);
-    render_description(f, chunks[2], config, ui_state);
+    render_meta_info(f, chunks[0], config, ui_state);
+    render_help(f, chunks[1], ui_state);
+    render_description(f, chunks[3], config, ui_state);
 
     {
         let chunks = Layout::default()
@@ -329,12 +338,28 @@ fn ui<B: Backend>(f: &mut Frame<B>, config: &model::Config, ui_state: &mut UiSta
                 ]
                 .as_ref(),
             )
-            .split(chunks[1]);
+            .split(chunks[2]);
 
         render_memories(f, chunks[0], config, ui_state);
         render_menus(f, chunks[1], config, ui_state);
         render_settings(f, chunks[2], config, ui_state);
     }
+}
+
+fn render_meta_info<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
+    let (msg, style) = (
+        vec![
+            Span::raw("Filename: "),
+            Span::styled(&config.filename, Style::default().fg(Color::Red)),
+            Span::raw(", Tag: '"),
+            Span::styled(format!("{:?}", &config.suffix), Style::default().fg(Color::Red)),
+        ],
+        Style::default(),
+    );
+    let mut text = Text::from(Spans::from(msg));
+    text.patch_style(style);
+    let help_message = Paragraph::new(text);
+    f.render_widget(help_message, rect);
 }
 
 fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState) {

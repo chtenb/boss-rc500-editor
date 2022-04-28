@@ -26,7 +26,7 @@ fn _write(filename: &str, config: &model::Config) -> io::Result<()> {
     }
 
     writeln!(&mut file, r#"</database>"#)?;
-    writeln!(&mut file, r#"6!  "#)?; // TODO: is this necessary?
+    file.write_all(&config.suffix)?;
     Ok(())
 }
 

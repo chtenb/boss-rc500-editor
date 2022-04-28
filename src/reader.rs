@@ -1,18 +1,24 @@
 use crate::model;
 use roxmltree;
+use std::str;
+
+fn find_subsequence(haystack: &Vec<u8>, needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|window| window == needle)
+}
 
 pub fn read(filename: &str) -> Result<model::Config, String> {
-    let mut text = std::fs::read_to_string(filename).map_err(|e| format!("Reading error: {}.", e))?;
-    // The last for characters are not valid xml
-    // So remove them including newline
-    text.pop();
-    text.pop();
-    text.pop();
-    text.pop();
-    text.pop();
-    roxmltree::Document::parse(&text)
+    // NOTE: read binary because the suffix can contain null bytes
+    let text = &std::fs::read(filename).map_err(|e| format!("Reading error: {}.", e))?;
+    // The suffix characters are not valid xml
+    let n = find_subsequence(text, b"</database>\n").ok_or("Could not find datebase end tag")?;
+    let pivot = n + "</database>\n".len();
+    let xml_bytes = &text[0..pivot].to_vec();
+    let xml = str::from_utf8(xml_bytes).map_err(|_| "XML was not valid utf8")?;
+    let suffix = text[pivot..].to_vec();
+
+    roxmltree::Document::parse(&xml)
         .map_err(|e| format!("Parsing error: {}.", e))
-        .and_then(|v| doc_to_config(v, filename))
+        .and_then(|v| doc_to_config(v, filename, suffix))
 }
 
 fn validate_mem_node(node: roxmltree::Node) -> Result<(), String> {
@@ -25,7 +31,7 @@ fn validate_mem_node(node: roxmltree::Node) -> Result<(), String> {
     }
 }
 
-fn doc_to_config(doc: roxmltree::Document, filename: &str) -> Result<model::Config, String> {
+fn doc_to_config(doc: roxmltree::Document, filename: &str, suffix: Vec<u8>) -> Result<model::Config, String> {
     let mut memories: Vec<model::Memory> = Vec::new();
     let database = doc
         .root()
@@ -71,6 +77,7 @@ fn doc_to_config(doc: roxmltree::Document, filename: &str) -> Result<model::Conf
     }
     Ok(model::Config {
         filename: filename.to_string(),
+        suffix: suffix,
         memories: memories,
     })
 }
