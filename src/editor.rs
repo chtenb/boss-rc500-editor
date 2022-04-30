@@ -13,7 +13,7 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
 };
 
@@ -316,8 +316,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, config: &model::Config, ui_state: &mut UiSta
             [
                 Constraint::Length(1),
                 Constraint::Length(1),
-                Constraint::Min(1),
-                Constraint::Length(5),
+                Constraint::Length(22),
+                Constraint::Min(5),
             ]
             .as_ref(),
         )
@@ -415,7 +415,9 @@ fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::
                     );
                     let mut text = Text::from(Spans::from(description));
                     text.patch_style(style);
-                    let msg = Paragraph::new(text).block(Block::default().title("DESCRIPTION").borders(Borders::ALL));
+                    let msg = Paragraph::new(text)
+                        .block(Block::default().title("DESCRIPTION").borders(Borders::ALL))
+                        .wrap(Wrap { trim: true });
                     f.render_widget(msg, rect);
                 }
                 _ => {}
