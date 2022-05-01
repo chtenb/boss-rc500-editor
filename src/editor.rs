@@ -398,7 +398,9 @@ fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::
             let (description, style) = (vec![Span::styled(msg, Style::default())], Style::default());
             let mut text = Text::from(Spans::from(description));
             text.patch_style(style);
-            let msg = Paragraph::new(text).block(Block::default().title("MESSAGE").borders(Borders::ALL));
+            let msg = Paragraph::new(text)
+                .block(Block::default().title("MESSAGE").borders(Borders::ALL))
+                .wrap(Wrap { trim: false });
             f.render_widget(msg, rect);
         }
         None => {
@@ -406,18 +408,13 @@ fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::
             match &selected_menu.content {
                 model::MenuContent::KeyValueMenu(selected_menu) => {
                     let selected_setting = get_selected_setting(selected_menu, ui_state);
-                    let (description, style) = (
-                        match model::DESCRIPTIONS.get(&selected_setting.key) {
-                            Some(text) => vec![Span::styled(*text, Style::default())],
-                            None => vec![Span::styled("-", Style::default())],
-                        },
-                        Style::default(),
-                    );
-                    let mut text = Text::from(Spans::from(description));
-                    text.patch_style(style);
+                    let text = match model::DESCRIPTIONS.get(&selected_setting.key) {
+                        Some(text) => Text::from(*text),
+                        None => Text::from("-"),
+                    };
                     let msg = Paragraph::new(text)
                         .block(Block::default().title("DESCRIPTION").borders(Borders::ALL))
-                        .wrap(Wrap { trim: true });
+                        .wrap(Wrap { trim: false });
                     f.render_widget(msg, rect);
                 }
                 _ => {}
