@@ -468,7 +468,8 @@ fn render_memories<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Con
         .iter()
         .map(|m| {
             let name = model::get_memory_name(m);
-            let content = vec![Spans::from(Span::raw(format!("{}: {}", m.id + 1, name)))];
+            let is_empty = if model::is_memory_empty(m) { "(empty)" } else { "" };
+            let content = vec![Spans::from(Span::raw(format!("{}: {} {}", m.id + 1, name, is_empty)))];
             ListItem::new(content).style(items_style)
         })
         .collect();

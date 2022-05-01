@@ -48,6 +48,23 @@ pub struct UntypedKeyValue {
     pub value: usize,
 }
 
+pub fn is_memory_empty(memory: &Memory) -> bool {
+    let track1 = memory.menus.iter().filter(|menu| menu.name == "TRACK1").next().unwrap();
+    if let MenuContent::KeyValueMenu(menu) = &track1.content {
+        let wavstat = menu
+            .settings
+            .iter()
+            .filter(|setting| setting.key == "WavStat")
+            .next()
+            .unwrap()
+            .value;
+        if wavstat == 1 {
+            return false;
+        }
+    }
+    return true;
+}
+
 pub static STRING_MAX_WIDTH: usize = 12;
 
 pub static DISPLAY_KEYS: phf::Map<&'static str, &'static str> = phf_map! {
