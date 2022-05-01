@@ -5,7 +5,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::cmp::min;
-use std::{error::Error, io};
+use std::error::Error;
 use tui::layout::Rect;
 use tui::widgets::ListState;
 use tui::{
@@ -18,6 +18,7 @@ use tui::{
 };
 
 use crate::arith;
+use crate::io;
 use crate::model;
 use crate::writer;
 
@@ -60,7 +61,6 @@ struct SettingIndex(BoundedIndex);
 
 enum Clipboard {
     Empty,
-    CopiedMenu(model::Menu),
     CopiedMemory(model::Memory),
 }
 
@@ -72,6 +72,8 @@ impl Default for Clipboard {
 
 #[derive(Default)]
 struct UiState {
+    working_dir: String,
+
     memory: MemoryIndex,
     menu: MenuIndex,
     setting: SettingIndex,
@@ -132,15 +134,20 @@ fn get_selected_setting_mut<'a>(
     &mut menu.settings[ui_state.setting.0.get(nr_settings)]
 }
 
-pub fn init(config: &mut model::Config) -> Result<(), Box<dyn Error>> {
+pub fn editor(config: &mut model::Config, working_dir: &str) -> Result<(), String> {
+    init(config, working_dir).map_err(|e| format!("{:?}", e))
+}
+
+pub fn init(config: &mut model::Config, working_dir: &str) -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
+    let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
     let mut ui_state = UiState::default();
+    ui_state.working_dir = working_dir.to_string();
     let res = run_app(&mut terminal, config, &mut ui_state);
 
     // restore terminal
@@ -186,8 +193,60 @@ fn save(config: &mut model::Config, ui_state: &mut UiState) -> Result<(), ()> {
     }
 }
 
+fn push(ui_state: &mut UiState) -> Result<(), ()> {
+    post_message(ui_state, "Pushing config to RC500...");
+    match io::push(&ui_state.working_dir) {
+        Ok(msg) => {
+            post_message(ui_state, &msg);
+            return Ok(());
+        }
+        Err(e) => {
+            post_message(ui_state, &format!("Error pushing config: {:?}", e));
+            return Err(());
+        }
+    }
+}
+
+fn pull(ui_state: &mut UiState) -> Result<(), ()> {
+    post_message(ui_state, "Pulling config from RC500...");
+    match io::pull(&ui_state.working_dir, true) {
+        Ok(msg) => {
+            post_message(ui_state, &msg);
+            return Ok(());
+        }
+        Err(e) => {
+            post_message(ui_state, &format!("Error pulling config: {:?}", e));
+            return Err(());
+        }
+    }
+}
+
 fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEvent) -> Result<(), ()> {
     clear_message(ui_state);
+    // Global key mappings
+    if ui_state.focus != Focus::Edit {
+        match key.code {
+            KeyCode::Char('!') => return Err(()),
+            KeyCode::Char('q') => match save(config, ui_state) {
+                Ok(_) => return Err(()),
+                Err(_) => return Ok(()),
+            },
+            KeyCode::Char('s') => {
+                let _ = save(config, ui_state);
+                return Ok(());
+            }
+            KeyCode::Char('^') => {
+                let _ = push(ui_state);
+                return Ok(());
+            }
+            KeyCode::Char('*') => {
+                let _ = pull(ui_state);
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+    // Local key mappings
     match ui_state.focus {
         Focus::Memory => match key.code {
             KeyCode::Up | KeyCode::Char('k') => ui_state.memory.0.dec(nr_memories(config)),
@@ -200,21 +259,12 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
             }
             KeyCode::Char('p') => match &ui_state.clipboard {
                 Clipboard::Empty => {}
-                Clipboard::CopiedMenu(_) => {}
                 Clipboard::CopiedMemory(copied) => {
                     let nr_memories = config.memories.len();
                     config.memories[ui_state.memory.0.get(nr_memories)].menus = copied.menus.clone();
                     post_message(ui_state, "Pasted memory in clipboard to selected memory!");
                 }
             },
-            KeyCode::Char('!') => return Err(()),
-            KeyCode::Char('q') => match save(config, ui_state) {
-                Ok(_) => return Err(()),
-                Err(_) => {}
-            },
-            KeyCode::Char('s') => {
-                let _ = save(config, ui_state);
-            }
             _ => {}
         },
         Focus::Menu => match key.code {
@@ -227,14 +277,6 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                     model::MenuContent::StringValueMenu(_) => ui_state.focus = Focus::Edit,
                     model::MenuContent::KeyValueMenu(_) => ui_state.focus = Focus::Setting,
                 }
-            }
-            KeyCode::Char('!') => return Err(()),
-            KeyCode::Char('q') => match save(config, ui_state) {
-                Ok(_) => return Err(()),
-                Err(_) => {}
-            },
-            KeyCode::Char('s') => {
-                let _ = save(config, ui_state);
             }
             _ => {}
         },
@@ -250,14 +292,6 @@ fn handle_input(config: &mut model::Config, ui_state: &mut UiState, key: KeyEven
                     KeyCode::Down | KeyCode::Char('j') => ui_state.setting.0.inc(menu.settings.len()),
                     KeyCode::Left | KeyCode::Char('h') => ui_state.focus = Focus::Menu,
                     KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => ui_state.focus = Focus::Edit,
-                    KeyCode::Char('!') => return Err(()),
-                    KeyCode::Char('q') => match save(config, ui_state) {
-                        Ok(_) => return Err(()),
-                        Err(_) => {}
-                    },
-                    KeyCode::Char('s') => {
-                        let _ = save(config, ui_state);
-                    }
                     _ => {}
                 },
             }
@@ -346,13 +380,13 @@ fn ui<B: Backend>(f: &mut Frame<B>, config: &model::Config, ui_state: &mut UiSta
     }
 }
 
-fn render_meta_info<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
+fn render_meta_info<B: Backend>(f: &mut Frame<B>, rect: Rect, _config: &model::Config, ui_state: &mut UiState) {
     let (msg, style) = (
         vec![
-            Span::raw("Filename: "),
-            Span::styled(&config.filename, Style::default().fg(Color::Red)),
-            Span::raw(", Tag: '"),
-            Span::styled(format!("{:?}", &config.suffix), Style::default().fg(Color::Red)),
+            Span::raw("Working directory: "),
+            Span::styled(&ui_state.working_dir, Style::default().fg(Color::Red)),
+            // Span::raw(", Tag: '"),
+            // Span::styled(format!("{:?}", &config.suffix), Style::default().fg(Color::Red)),
         ],
         Style::default(),
     );
@@ -380,7 +414,11 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
                 Span::styled("y", Style::default().fg(Color::Red)),
                 Span::raw(" to copy a memory, "),
                 Span::styled("p", Style::default().fg(Color::Red)),
-                Span::raw(" to paste a memory"),
+                Span::raw(" to paste a memory, "),
+                Span::styled("^", Style::default().fg(Color::Red)),
+                Span::raw(" to push to RC500, "),
+                Span::styled("*", Style::default().fg(Color::Red)),
+                Span::raw(" to pull from RC500 "),
             ],
             Style::default(),
         )
