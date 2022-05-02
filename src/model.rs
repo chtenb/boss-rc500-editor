@@ -430,22 +430,7 @@ pub static PEDAL_CTL_VALUES: &'static [&'static str] = &[
     "Extent Dec",
 ];
 
-pub fn get_description(setting: &UntypedKeyValue) -> String {
-    let base_text = match DESCRIPTIONS.get(&setting.key) {
-        Some(text) => text,
-        None => "-",
-    };
-    let by_value = DESCRIPTIONS_BY_VALUE
-        .get(&setting.key)
-        .and_then(|array| array.get(setting.value));
-
-    match by_value {
-        None => base_text.to_string(),
-        Some(value_text) => format!("{}\n\n{}", base_text, value_text),
-    }
-}
-
-static DESCRIPTIONS: phf::Map<&'static str, &'static str> = phf_map! {
+pub static DESCRIPTIONS: phf::Map<&'static str, &'static str> = phf_map! {
     // TRACK
     "Rev" => "\
 Specifies conventional playback (Off) or reverse playback (On). When REVERSE is set to 'On' you won't be able to switch to overdubbing after a recording has been completed.
@@ -686,21 +671,21 @@ Auto: The length of the first-recorded phrase will be the Loop Length.
     "TargetMax" => "Target Max",
 };
 
-static DESCRIPTIONS_BY_VALUE: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+pub static DESCRIPTIONS_BY_VALUE: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
     // CTL
-    // "Pedal1" => PEDAL_CTL_VALUES, // TODO
-    // "Pedal2" => PEDAL_CTL_VALUES, // TODO
-    // "Pedal3" => PEDAL_CTL_VALUES, // TODO
-    // "Ctl1" => PEDAL_CTL_VALUES, // TODO
-    // "Ctl2" => PEDAL_CTL_VALUES, // TODO
+    "Pedal1" => PEDAL_VALUE_DESCRIPTIONS,
+    "Pedal2" => PEDAL_VALUE_DESCRIPTIONS,
+    "Pedal3" => PEDAL_VALUE_DESCRIPTIONS,
+    "Ctl1" => PEDAL_VALUE_DESCRIPTIONS,
+    "Ctl2" => PEDAL_VALUE_DESCRIPTIONS,
     "Exp" => &[
         "No function is assigned.",
-        "Control the 'LEVEL' of track 1 in the range of 0-200.",
-        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of track 1 as the maximum value.",
-        "Control the 'LEVEL' of track 2 in the range of 0-200.",
-        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of track 2 as the maximum value.",
-        "Control the 'LEVEL' of the currently selected track in the range of 0-200.",
-        "Control the level of the currently selected track in the range of 0-'maximum value', with the 'LEVEL' setting of the currently selected track as the maximum value.",
+        "Control the 'LEVEL' of Track 1 in the range of 0-200.",
+        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of Track 1 as the maximum value.",
+        "Control the 'LEVEL' of Track 2 in the range of 0-200.",
+        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of Track 2 as the maximum value.",
+        "Control the 'LEVEL' of the currently selected Track in the range of 0-200.",
+        "Control the level of the currently selected Track in the range of 0-'maximum value', with the 'LEVEL' setting of the currently selected Track as the maximum value.",
         "Press the pedal to make the tempo faster.",
         "Press the pedal to make the tempo slower.",
         "Control a parameter according to the loop FX type.",
@@ -718,3 +703,64 @@ static DESCRIPTIONS_BY_VALUE: phf::Map<&'static str, &'static [&'static str]> = 
     // "TargetMin" => 0, // TODO
     // "TargetMax" => 0, // TODO
 };
+
+static PEDAL_VALUE_DESCRIPTIONS : &'static [&'static str] = &[
+"No function is assigned.",
+"Switch between record/play/overdubbing for track 1.  Long press (two seconds or longer) the switch during playback or overdubbing to Undo, long press the switch once again to Redo.",
+"Switch between record/play/stop (press the switch twice) for track 1.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.",
+"Switch between record/play/stop (press the switch twice) for track 1.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Put track 1 in record/play only while you hold down the switch.",
+"Switch between play/stop for track 1.",
+"Switch between play/stop for track 1.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Stop record/play for track 1.",
+"Stop record/play for track 1.  Specify the tempo (tap tempo) by pressing the switch several times at the desired interval while stopped.",
+"Stop record/play for track 1.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Stop record/play for track 1.  Specify the tempo (tap tempo) by pressing the switch several times at the desired interval while stopped.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Clear track 1.",
+"Undo/redo recording or the most recent overdubbing for track 1.",
+"Turn reverse play on/off for track 1.",
+"Switch between record/play/overdubbing for track 2.  Long press (two seconds or longer) the switch during playback or overdubbing to Undo, long press the switch once again to Redo.",
+"Switch between record/play/stop (press the switch twice) for track 2.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.",
+"Switch between record/play/stop (press the switch twice) for track 2.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Put track 2 in record/play only while you hold down the switch.",
+"Switch between play/stop for track 2.",
+"Switch between play/stop for track 2.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Stop record/play for track 2.",
+"Stop record/play for track 2.  Specify the tempo (tap tempo) by pressing the switch several times at the desired interval while stopped.",
+"Stop record/play for track 2.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Stop record/play for track 2.  Specify the tempo (tap tempo) by pressing the switch several times at the desired interval while stopped.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Clear track 2.",
+"Undo/redo recording or the most recent overdubbing for track 2.",
+"Turn reverse play on/off for track 2.",
+"Switch between tracks 1 and 2. Long-press the switch to select both tracks.  If both tracks are selected, operating the switch assigned to CUR REC/PLY lets you control play/stop for both tracks.",
+"Switch between record/play/overdubbing for current track.  Long press (two seconds or longer) the switch during playback or overdubbing to Undo, long press the switch once again to Redo.",
+"Switch between record/play/stop (press the switch twice) for current track.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.",
+"Switch between record/play/stop (press the switch twice) for current track.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Put current track in record/play only while you hold down the switch.",
+"Switch between play/stop for current track.",
+"Switch between play/stop for current track.  Long press (two seconds or longer) the switch during recording or playback to Undo, long press the switch once again to Redo.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Stop record/play for current track.",
+"Stop record/play for current track.  Specify the tempo (tap tempo) by pressing the switch several times at the desired interval while stopped.",
+"Stop record/play for current track.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Stop record/play for current track.  Specify the tempo (tap tempo) by pressing the switch several times at the desired interval while stopped.  Long press (two seconds or longer) the switch during stopped, the track is cleared.",
+"Clear current track.",
+"Undo/redo recording or the most recent overdubbing for current track.",
+"Turn reverse play on/off for current track.",
+"Simultaneously start play for tracks 1 and 2.",
+"Press the switch several times at the desired interval to specify the tempo.",
+"Long-press the switch (two seconds or longer) to return to the previous tempo.",
+"Turn the loop FX on/off.",
+"Turn the loop FX on/off for track 1.",
+"Turn the loop FX on/off for track 2.",
+"Turn the loop FX on/off for the currently selected track.",
+"Switch the loop FX in the order of SCATTER 1-4 -> REPEAT 1-3 -> SHIFT 1-2 -> VINYL FLICK -> SCATTER1...",
+"Switch the loop FX in the order of VINYL FLICK -> SHIFT 2-1 -> REPEAT 3-1 -> SCATTER 4-1 -> VINYL FLICK...",
+"Switch the rhythm between play/stop.",
+"Play the rhythm.",
+"Stop playing the rhythm.",
+"Switch to the next memory.",
+"Switch to the previous memory.",
+"Mute the audio from the mic.",
+"Switch the 'EXTENT' (p. 13) setting in the order of EXT10EXT2...EXT50...",
+"Switch the 'EXTENT' (p. 13) setting in the order of EXT50EXT4...EXT10...",
+];

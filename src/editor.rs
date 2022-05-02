@@ -429,6 +429,47 @@ fn render_help<B: Backend>(f: &mut Frame<B>, rect: Rect, ui_state: &mut UiState)
     f.render_widget(help_message, rect);
 }
 
+fn get_key_name(setting: &model::UntypedKeyValue) -> &str {
+    let key: &str = &setting.key;
+    model::DISPLAY_KEYS.get(key).unwrap_or(&key)
+}
+
+fn get_value_name(setting: &model::UntypedKeyValue) -> String {
+    let default: String = format!("{}", setting.value);
+    let key: &str = &setting.key;
+    let result = model::DISPLAY_VALUES
+        .get(key)
+        .and_then(|&values| values.get(setting.value))
+        .map(|&s| s.to_string())
+        .unwrap_or(default);
+    result
+}
+
+pub fn get_description(setting: &model::UntypedKeyValue) -> Text {
+    let base_text = match model::DESCRIPTIONS.get(&setting.key) {
+        Some(text) => text,
+        None => "-",
+    };
+    let value_name = get_value_name(setting);
+    let by_value = model::DESCRIPTIONS_BY_VALUE
+        .get(&setting.key)
+        .and_then(|array| array.get(setting.value));
+
+    let mut text = Text::raw(base_text);
+    match by_value {
+        None => {}
+        Some(&value_text) => {
+            text.extend(Text::raw("\n\n"));
+            text.extend(Text::styled(
+                format!("{}: ", value_name),
+                Style::default().fg(Color::Blue),
+            ));
+            text.extend(Text::styled(value_text, Style::default().fg(Color::Blue)));
+        }
+    };
+    text
+}
+
 fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Config, ui_state: &mut UiState) {
     // Render message if existing, otherwise render setting description
     match &ui_state.message {
@@ -446,7 +487,7 @@ fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::
             match &selected_menu.content {
                 model::MenuContent::KeyValueMenu(selected_menu) => {
                     let selected_setting = get_selected_setting(selected_menu, ui_state);
-                    let text = Text::from(model::get_description(&selected_setting));
+                    let text = get_description(&selected_setting);
                     let msg = Paragraph::new(text)
                         .block(Block::default().title("DESCRIPTION").borders(Borders::ALL))
                         .wrap(Wrap { trim: false });
@@ -514,22 +555,20 @@ fn render_settings<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::Con
                 .settings
                 .iter()
                 .map(|s| {
-                    let key: &str = &s.key;
-                    let value_str: &str = &format!("{}", s.value);
-                    let display_key: &str = model::DISPLAY_KEYS.get(key).unwrap_or(&key);
-                    let display_value: &str = model::DISPLAY_VALUES
-                        .get(key)
-                        .and_then(|values| values.get(s.value))
-                        .unwrap_or(&value_str);
-                    let content = vec![Spans::from(Span::raw(format!("{} = {}", display_key, display_value)))];
-                    ListItem::new(content).style(items_style)
+                    let display_key: &str = get_key_name(&s);
+                    let display_value: String = get_value_name(&s);
+                    let content = vec![
+                        Span::styled(format!("{} = ", display_key), items_style),
+                        Span::styled(display_value, items_style.fg(Color::Blue)),
+                    ];
+                    ListItem::new(Spans::from(content))
                 })
                 .collect();
             ui_state
                 .setting_state
                 .select(Some(ui_state.setting.0.get(selected_menu.settings.len())));
             let selected_style = if ui_state.focus == Focus::Edit {
-                items_style.fg(Color::Red)
+                items_style.add_modifier(Modifier::REVERSED).fg(Color::Magenta)
             } else {
                 items_style.add_modifier(Modifier::REVERSED)
             };
