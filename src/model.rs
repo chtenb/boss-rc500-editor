@@ -321,9 +321,9 @@ pub static DISPLAY_VALUES: phf::Map<&'static str, &'static [&'static str]> = phf
     "Pedal3" => PEDAL_CTL_VALUES,
     "Ctl1" => PEDAL_CTL_VALUES,
     "Ctl2" => PEDAL_CTL_VALUES,
-    "Exp" => &[ "T1 Level1", "T1 Level2", "T2 Level1", "T2 Level2", "Current Level1", "CUR Level2",
+    "Exp" => &[ "Off", "T1 Level1", "T1 Level2", "T2 Level1", "T2 Level2", "Current Level1", "Current Level2",
     "Tempo Up", "Tempo Down", "FX Control", "Rhythm Level1", "Rhythm Level2", "Memory Level1", "Memory Level2",
-],
+    ],
 
     // ASSIGN
     // "Sw" => "",
@@ -331,7 +331,7 @@ pub static DISPLAY_VALUES: phf::Map<&'static str, &'static [&'static str]> = phf
     "Pedal 1", "Pedal 2", "Pedal 3", "Expression Pedal", "CTL1 Pedal", "CTL2 Pedal", "TR1 Knob", "TR2 Knob",
     "TR1 Play/Stop", "TR2 Play/Stop", "Current Track Change", "Sync Start",
     "CC 1", "CC 2", "CC 3", "CC 4", "CC 5", "CC 6", "CC 7", "CC 8", "CC 9", "CC 10", "CC 11", "CC 12", "CC 13", "CC 14", "CC 15", "CC 16", "CC 17", "CC 18", "CC 19", "CC 20", "CC 21", "CC 22", "CC 23", "CC 24", "CC 25", "CC 26", "CC 27", "CC 28", "CC 29", "CC 30", "CC 31", "CC 64", "CC 65", "CC 66", "CC 67", "CC 68", "CC 69", "CC 70", "CC 71", "CC 72", "CC 73", "CC 74", "CC 75", "CC 76", "CC 77", "CC 78", "CC 79", "CC 80", "CC 81", "CC 82", "CC 83", "CC 84", "CC 85", "CC 86", "CC 87", "CC 88", "CC 89", "CC 90", "CC 91", "CC 92", "CC 93", "CC 94", "CC 95",
-],
+    ],
     "SourceMode" => &["Moment", "Toggle"],
     "Target" =>
     &[
@@ -430,7 +430,22 @@ pub static PEDAL_CTL_VALUES: &'static [&'static str] = &[
     "Extent Dec",
 ];
 
-pub static DESCRIPTIONS: phf::Map<&'static str, &'static str> = phf_map! {
+pub fn get_description(setting: &UntypedKeyValue) -> String {
+    let base_text = match DESCRIPTIONS.get(&setting.key) {
+        Some(text) => text,
+        None => "-",
+    };
+    let by_value = DESCRIPTIONS_BY_VALUE
+        .get(&setting.key)
+        .and_then(|array| array.get(setting.value));
+
+    match by_value {
+        None => base_text.to_string(),
+        Some(value_text) => format!("{}\n\n{}", base_text, value_text),
+    }
+}
+
+static DESCRIPTIONS: phf::Map<&'static str, &'static str> = phf_map! {
     // TRACK
     "Rev" => "\
 Specifies conventional playback (Off) or reverse playback (On). When REVERSE is set to 'On' you won't be able to switch to overdubbing after a recording has been completed.
@@ -653,4 +668,53 @@ Auto: The length of the first-recorded phrase will be the Loop Length.
     "ToneLow" => "Tone Low",
     "ToneHigh" => "Tone High",
     "State" => "Current State",
+
+    // CTL
+    "Pedal1" => "Pedal 1",
+    "Pedal2" => "Pedal 2",
+    "Pedal3" => "Pedal 3",
+    "Ctl1" => "Control 1",
+    "Ctl2" => "Control 2",
+    "Exp" => "Specifies the function of a expression pedal connected to the CTL 1, 2/EXP jack.",
+
+    // ASSIGN
+    // "Sw" => "",
+    // "Source" => "",
+    "SourceMode" => "Source Mode",
+    // "Target" => "",
+    "TargetMin" => "Target Min",
+    "TargetMax" => "Target Max",
+};
+
+static DESCRIPTIONS_BY_VALUE: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    // CTL
+    // "Pedal1" => PEDAL_CTL_VALUES, // TODO
+    // "Pedal2" => PEDAL_CTL_VALUES, // TODO
+    // "Pedal3" => PEDAL_CTL_VALUES, // TODO
+    // "Ctl1" => PEDAL_CTL_VALUES, // TODO
+    // "Ctl2" => PEDAL_CTL_VALUES, // TODO
+    "Exp" => &[
+        "No function is assigned.",
+        "Control the 'LEVEL' of track 1 in the range of 0-200.",
+        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of track 1 as the maximum value.",
+        "Control the 'LEVEL' of track 2 in the range of 0-200.",
+        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of track 2 as the maximum value.",
+        "Control the 'LEVEL' of the currently selected track in the range of 0-200.",
+        "Control the level of the currently selected track in the range of 0-'maximum value', with the 'LEVEL' setting of the currently selected track as the maximum value.",
+        "Press the pedal to make the tempo faster.",
+        "Press the pedal to make the tempo slower.",
+        "Control a parameter according to the loop FX type.",
+        "Control the 'LEVEL' of rhythm in the range of 0-200.",
+        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of rhythm as the maximum value.",
+        "Control the 'LEVEL' of memory in the range of 0-200.",
+        "Control the level in the range of 0-'maximum value', with the 'LEVEL' setting of memory as the maximum value.",
+    ],
+
+    // ASSIGN
+    // "Sw" => "",
+    // "Source" => &[ ], // TODO
+    // "SourceMode" => &["Moment", "Toggle"], // TODO
+    // "Target" => &[ ], // TODO
+    // "TargetMin" => 0, // TODO
+    // "TargetMax" => 0, // TODO
 };

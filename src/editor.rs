@@ -446,10 +446,7 @@ fn render_description<B: Backend>(f: &mut Frame<B>, rect: Rect, config: &model::
             match &selected_menu.content {
                 model::MenuContent::KeyValueMenu(selected_menu) => {
                     let selected_setting = get_selected_setting(selected_menu, ui_state);
-                    let text = match model::DESCRIPTIONS.get(&selected_setting.key) {
-                        Some(text) => Text::from(*text),
-                        None => Text::from("-"),
-                    };
+                    let text = Text::from(model::get_description(&selected_setting));
                     let msg = Paragraph::new(text)
                         .block(Block::default().title("DESCRIPTION").borders(Borders::ALL))
                         .wrap(Wrap { trim: false });
