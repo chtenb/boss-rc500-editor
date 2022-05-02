@@ -1,5 +1,6 @@
 use clap::Parser;
 mod arith;
+mod descriptions;
 mod editor;
 mod exit_codes;
 mod io;

@@ -18,6 +18,7 @@ use tui::{
 };
 
 use crate::arith;
+use crate::descriptions;
 use crate::io;
 use crate::model;
 use crate::writer;
@@ -446,12 +447,12 @@ fn get_value_name(setting: &model::UntypedKeyValue) -> String {
 }
 
 pub fn get_description(setting: &model::UntypedKeyValue) -> Text {
-    let base_text = match model::DESCRIPTIONS.get(&setting.key) {
+    let base_text = match descriptions::DESCRIPTIONS.get(&setting.key) {
         Some(text) => text,
         None => "-",
     };
     let value_name = get_value_name(setting);
-    let by_value = model::DESCRIPTIONS_BY_VALUE
+    let by_value = descriptions::DESCRIPTIONS_BY_VALUE
         .get(&setting.key)
         .and_then(|array| array.get(setting.value));
 
